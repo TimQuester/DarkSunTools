@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "GFFtool": {
+      "commandName": "Project",
+      "commandLineArgs": "--gff=RGN0A.GFF --list-contents "
+    }
+  }
+}

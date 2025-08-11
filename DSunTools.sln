@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common", "Common\Common.csp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FontTool", "FontTool\FontTool.csproj", "{059DE6D4-B440-4D3A-8614-21591A23A968}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TextTools", "TextTools\TextTools.csproj", "{D9024944-72A0-444B-9D97-6993257AB9DA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{059DE6D4-B440-4D3A-8614-21591A23A968}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{059DE6D4-B440-4D3A-8614-21591A23A968}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{059DE6D4-B440-4D3A-8614-21591A23A968}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D9024944-72A0-444B-9D97-6993257AB9DA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9024944-72A0-444B-9D97-6993257AB9DA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9024944-72A0-444B-9D97-6993257AB9DA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9024944-72A0-444B-9D97-6993257AB9DA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

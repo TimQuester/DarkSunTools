@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Text;
 
 public class Glyph
 {
@@ -163,6 +164,7 @@ public class FontParser
                 }
 
                 bmp.UnlockBits(bitmapData);
+                bmp.MakeTransparent(Color.Black);
                 bmp.Save(filename, ImageFormat.Png);
             }
         }

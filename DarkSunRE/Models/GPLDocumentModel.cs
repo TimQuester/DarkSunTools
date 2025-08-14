@@ -15,6 +15,7 @@ namespace DarkSunRE.Models
         {
             Name = name;
             originalBytes = File.ReadAllBytes(path);
+            newBytes = originalBytes;
             decodedStrings = DecodeStrings(originalBytes);
         }
         public string Name { get; set; }
@@ -27,7 +28,7 @@ namespace DarkSunRE.Models
         /// <returns>Список строк</returns>
         List<GPLString> DecodeStrings(byte[] bytes)
         {
-            const int TextBufferSize = 300;
+            const int TextBufferSize = 3000;
             int strNumber = 0;
             List<GPLString> result = new List<GPLString>();
             int position = 0;

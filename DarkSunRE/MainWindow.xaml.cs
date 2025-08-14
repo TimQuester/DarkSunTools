@@ -56,8 +56,9 @@ namespace DarkSunRE
             dataGrid.SelectedCellsChanged += DataGrid_SelectedCellsChanged;
 
             streamOld = new MemoryStream(Document.originalBytes);
-            streamNew = new MemoryStream(Document.newBytes);
-            hexViewer1.Stream = streamOld;
+            if (Document.newBytes != null) streamNew = new MemoryStream(Document.newBytes);
+            hvp.LoadBytes(Document.originalBytes, Document.newBytes);
+            //hexViewer1.Stream = streamOld;
             //hexViewer2.Stream = streamNew;
 
             layoutDocument.Content = dataGrid;
@@ -67,8 +68,11 @@ namespace DarkSunRE
 
         private void DataGrid_SelectedCellsChanged(object sender, SelectedCellsChangedEventArgs e)
         {
-            hexViewer1.SelectionStart = ((GPLString)((DataGrid)sender).SelectedItem).StartPosition;
-            hexViewer1.SelectionStop = ((GPLString)((DataGrid)sender).SelectedItem).EndPosition;
+            //long start = ((GPLString)((DataGrid)sender).SelectedItem).StartPosition;
+            //hexViewer1.SetPosition(start);
+            //hexViewer1.SelectionStart = ((GPLString)((DataGrid)sender).SelectedItem).StartPosition;
+            //hexViewer1.SelectionStop = ((GPLString)((DataGrid)sender).SelectedItem).EndPosition;            
+            hvp.SetPosition(((GPLString)((DataGrid)sender).SelectedItem).StartPosition, ((GPLString)((DataGrid)sender).SelectedItem).EndPosition);
         }
     }
 }

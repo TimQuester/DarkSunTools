@@ -6,9 +6,10 @@
         xmlns:local="clr-namespace:DarkSunRE"
         xmlns:models="clr-namespace:DarkSunRE.Models"
         xmlns:avalondock="http://schemas.xceed.com/wpf/xaml/avalondock"
-        xmlns:hexview="clr-namespace:WpfHexaEditor;assembly=WPFHexaEditor"
+        xmlns:hexview="clr-namespace:WpfHexaEditor;assembly=WPFHexaEditor"        
+        xmlns:controls="clr-namespace:DarkSunRE.Controls"
         mc:Ignorable="d"
-        Title="MainWindow" Height="1024" Width="800">
+        Title="MainWindow" Width="1200" Height="1024">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="auto"/>
@@ -27,7 +28,7 @@
                 </MenuItem>
             </Menu>
             <ToolBar>
-                <Button>OF</Button>
+                <Button Click="MenuItem_Click">OF</Button>
             </ToolBar>
         </StackPanel>
         <avalondock:DockingManager Grid.Row="1" Grid.ColumnSpan="3">
@@ -48,7 +49,8 @@
                         <avalondock:LayoutDocumentPane x:Name="layoutDocumentPane"/>
                         <avalondock:LayoutAnchorablePane>
                             <avalondock:LayoutAnchorable Title="Hex View">
-                                <hexview:HexEditor x:Name="hexViewer1" ReadOnlyMode="True"/>
+                                <!--<hexview:HexEditor x:Name="hexViewer1" ReadOnlyMode="True"/>-->
+                                <controls:HexViewsPane x:Name="hvp"/>
                             </avalondock:LayoutAnchorable>
                         </avalondock:LayoutAnchorablePane>
                     </avalondock:LayoutPanel>

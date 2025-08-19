@@ -1,9 +1,12 @@
 ﻿using DarkSunRE.Models;
 using Microsoft.Win32;
+using System;
 using System.Collections;
 using System.IO;
+using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -22,7 +25,7 @@ namespace DarkSunRE
     /// </summary>
     public partial class MainWindow : Window
     {
-        ProjectModel Project = new ProjectModel();   
+        ProjectModel Project = new ProjectModel();
 
         public MainWindow()
         {
@@ -45,34 +48,93 @@ namespace DarkSunRE
 
         private void TreeViewItem_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            MemoryStream streamOld, streamNew;
             string path = $"{Project.Path}\\{((TreeViewItem)sender).Header.ToString()}";
             string name = ((TreeViewItem)sender).Header.ToString();
-            var Document = new GPLDocumentModel(path, name);
-            LayoutDocument layoutDocument = new LayoutDocument();
-            layoutDocument.Title = Document.Name;
-            DataGrid dataGrid = new DataGrid();
-            dataGrid.ItemsSource = Document.decodedStrings;
-            dataGrid.SelectedCellsChanged += DataGrid_SelectedCellsChanged;
 
-            streamOld = new MemoryStream(Document.originalBytes);
-            if (Document.newBytes != null) streamNew = new MemoryStream(Document.newBytes);
-            hvp.LoadBytes(Document.originalBytes, Document.newBytes);
-            //hexViewer1.Stream = streamOld;
-            //hexViewer2.Stream = streamNew;
+            if (!Project.OpenedDocuments.Any(d => d.Name == name))
+            {
 
-            layoutDocument.Content = dataGrid;
-            layoutDocumentPane.Children.Add(layoutDocument);
-            layoutDocument.IsActive = true;
+
+                MemoryStream streamOld, streamNew;
+                var Document = new GPLDocumentModel(path, name);
+                LayoutDocument layoutDocument = new LayoutDocument();
+                layoutDocument.Title = Document.Name;
+                DataGrid dataGrid = new DataGrid();
+
+                dataGrid.AutoGenerateColumns = false;
+                dataGrid.ItemsSource = Document.decodedStrings;
+                dataGrid.Columns.Add(new DataGridTextColumn() { Header = "#", Binding = new Binding(nameof(GPLString.StringNumber)) });
+                dataGrid.Columns.Add(new DataGridTextColumn() { Header = "Start", Binding = new Binding(nameof(GPLString.StartPosition)) });
+                dataGrid.Columns.Add(new DataGridTextColumn() { Header = "End", Binding = new Binding(nameof(GPLString.EndPosition)) });
+                var templateColumn = new DataGridTemplateColumn
+                {
+                    Header = "Strings",
+                    CellTemplate = (DataTemplate)FindResource("VerticalStringsTemplate")
+                };
+                dataGrid.Columns.Add(templateColumn);
+
+                dataGrid.SelectedCellsChanged += DataGrid_SelectedCellsChanged;
+
+                streamOld = new MemoryStream(Document.originalBytes);
+                if (Document.newBytes != null) streamNew = new MemoryStream(Document.newBytes);
+                hvp.LoadBytes(Document.originalBytes, Document.newBytes);
+                layoutDocument.Content = dataGrid;
+                layoutDocumentPane.Children.Add(layoutDocument);
+                layoutDocument.IsActive = true;
+
+                Project.OpenedDocuments.Add(Document);
+            }
         }
 
         private void DataGrid_SelectedCellsChanged(object sender, SelectedCellsChangedEventArgs e)
         {
-            //long start = ((GPLString)((DataGrid)sender).SelectedItem).StartPosition;
-            //hexViewer1.SetPosition(start);
-            //hexViewer1.SelectionStart = ((GPLString)((DataGrid)sender).SelectedItem).StartPosition;
-            //hexViewer1.SelectionStop = ((GPLString)((DataGrid)sender).SelectedItem).EndPosition;            
             hvp.SetPosition(((GPLString)((DataGrid)sender).SelectedItem).StartPosition, ((GPLString)((DataGrid)sender).SelectedItem).EndPosition);
+            ((DataGrid)sender).Focus();
+        }
+
+        private void UpdateGPL_Click(object sender, RoutedEventArgs e)
+        {
+            if (layoutDocumentPane.SelectedContent != null)
+            {
+                var doc = Project.OpenedDocuments.Single(d => d.Name == ((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
+                if (doc != null)
+                {
+                    doc.ApplyStringChanges();
+                    hvp.LoadBytes(doc.originalBytes, doc.newBytes);
+                }
+            }
+        }
+
+        private void SaveNewGPL_Click(object sender, RoutedEventArgs e)
+        {
+            if (layoutDocumentPane.SelectedContent != null)
+            {
+                var doc = Project.OpenedDocuments.Single(d => d.Name == ((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
+                if (doc != null)
+                {
+                    string newFilePath = $"{doc.Path}_modified";
+
+                    File.WriteAllBytes(newFilePath, doc.newBytes);
+                }
+            }
+        }
+
+        private void SaveJSONGPL_Click(object sender, RoutedEventArgs e)
+        {
+            var doc = Project.OpenedDocuments.Single(d => d.Name == ((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
+            using (FileStream fs = new FileStream($"{doc.Path}.json", FileMode.OpenOrCreate))
+            {
+                JsonSerializer.Serialize<GPLDocumentModel>(fs, doc);
+            }
+        }
+        private void LoadJSONGPL_Click(object sender, RoutedEventArgs e)
+        {
+            var doc = Project.OpenedDocuments.Single(d => d.Name == ((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
+            using (FileStream fs = new FileStream($"{doc.Path}.json", FileMode.OpenOrCreate))
+            {
+                doc = JsonSerializer.Deserialize<GPLDocumentModel>(fs);
+                ((DataGrid)((LayoutDocument)layoutDocumentPane.SelectedContent).Content).ItemsSource = doc.decodedStrings;
+            }
         }
     }
 }

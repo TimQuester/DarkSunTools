@@ -70,7 +70,7 @@ class Program
     }
 
     /// <summary>
-    /// 
+    /// Сформировать новый набор байтов
     /// </summary>
     /// <param name="originalBytes">Изначальный файл без изменений</param>
     /// <param name="originalStrings">Оригинальная строка в 8 битах</param>

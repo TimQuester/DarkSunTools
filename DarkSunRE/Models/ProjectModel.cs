@@ -56,5 +56,7 @@ namespace DarkSunRE.Models
             }
             return resourceFiles;
         }
+
+        public List<GPLDocumentModel> OpenedDocuments = new List<GPLDocumentModel>();
     }
 }

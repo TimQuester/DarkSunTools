@@ -10,6 +10,23 @@
         xmlns:controls="clr-namespace:DarkSunRE.Controls"
         mc:Ignorable="d"
         Title="MainWindow" Width="1200" Height="1024">
+    <Window.Resources>
+        <DataTemplate x:Key="VerticalStringsTemplate">
+            <StackPanel Orientation="Vertical">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding OriginalString}" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding OriginalSize}" Padding="2"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBox Text="{Binding NewString, UpdateSourceTrigger=PropertyChanged}"                      
+                     Background="Transparent"
+                     BorderThickness="1"
+                     Padding="2,0"/>
+                    <TextBlock Text="{Binding NewSize, UpdateSourceTrigger=PropertyChanged}" Padding="2"/>
+                </StackPanel>
+            </StackPanel>
+        </DataTemplate>
+    </Window.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="auto"/>
@@ -28,7 +45,11 @@
                 </MenuItem>
             </Menu>
             <ToolBar>
-                <Button Click="MenuItem_Click">OF</Button>
+                <Button Click="MenuItem_Click" BorderBrush="Black" BorderThickness ="1">Open folder</Button>
+                <Button Click="UpdateGPL_Click" BorderBrush="Black" BorderThickness="1" HorizontalAlignment="Left">Update GPL</Button>
+                <Button Click="SaveNewGPL_Click" BorderBrush="Black" BorderThickness="1" Content="Save new GPL"/>
+                <Button Click="SaveJSONGPL_Click" BorderBrush="Black" BorderThickness="1" Content="Save JSON GPL"/>
+                <Button Click="LoadJSONGPL_Click" BorderBrush="Black" BorderThickness="1" Content="Load JSON GPL"/>
             </ToolBar>
         </StackPanel>
         <avalondock:DockingManager Grid.Row="1" Grid.ColumnSpan="3">
@@ -49,7 +70,6 @@
                         <avalondock:LayoutDocumentPane x:Name="layoutDocumentPane"/>
                         <avalondock:LayoutAnchorablePane>
                             <avalondock:LayoutAnchorable Title="Hex View">
-                                <!--<hexview:HexEditor x:Name="hexViewer1" ReadOnlyMode="True"/>-->
                                 <controls:HexViewsPane x:Name="hvp"/>
                             </avalondock:LayoutAnchorable>
                         </avalondock:LayoutAnchorablePane>

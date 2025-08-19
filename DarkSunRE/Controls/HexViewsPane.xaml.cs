@@ -35,6 +35,9 @@ namespace DarkSunRE.Controls
             streamNew = new MemoryStream(bytesNew);
             hexViewer1.Stream = streamOld;
             hexViewer2.Stream = streamNew;
+
+            hexViewer1.RefreshView();
+            hexViewer2.RefreshView();
         }
 
         public void SetPosition(long StartPosition, long EndPosition)

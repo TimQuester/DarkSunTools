@@ -22,8 +22,12 @@ namespace DarkSunRE.Models
             originalBytes.CopyTo(newBytes);
             decodedStrings = DecodeStrings(originalBytes);
         }
+        public GPLDocumentModel()
+        {
+
+        }
         public string Name { get; set; }
-        public string Path { get; set; }
+        public string Path;// { get; set; }
         public List<GPLString> decodedStrings { get; set; } = new List<GPLString>();
 
         /// <summary>

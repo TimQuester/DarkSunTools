@@ -62,6 +62,14 @@ namespace DarkSunRE
                 DataGrid dataGrid = new DataGrid();
 
                 dataGrid.AutoGenerateColumns = false;
+                if (Resources["GrayedOutRowStyle"] is Style grayStyle)
+                {
+                    dataGrid.RowStyle = grayStyle;
+                }
+                else
+                {
+                    MessageBox.Show("Стиль не найден в ресурсах");
+                }
                 dataGrid.ItemsSource = Document.decodedStrings;
                 dataGrid.Columns.Add(new DataGridTextColumn() { Header = "#", Binding = new Binding(nameof(GPLString.StringNumber)) });
                 dataGrid.Columns.Add(new DataGridTextColumn() { Header = "Start", Binding = new Binding(nameof(GPLString.StartPosition)) });
@@ -72,6 +80,7 @@ namespace DarkSunRE
                     CellTemplate = (DataTemplate)FindResource("VerticalStringsTemplate")
                 };
                 dataGrid.Columns.Add(templateColumn);
+                dataGrid.Columns.Add(new DataGridCheckBoxColumn() { Header = "Real", Binding = new Binding(nameof(GPLString.RealString)) });
 
                 dataGrid.SelectedCellsChanged += DataGrid_SelectedCellsChanged;
 
@@ -88,6 +97,8 @@ namespace DarkSunRE
 
         private void DataGrid_SelectedCellsChanged(object sender, SelectedCellsChangedEventArgs e)
         {
+            if (((DataGrid)sender).SelectedItem == null)
+                return;
             hvp.SetPosition(((GPLString)((DataGrid)sender).SelectedItem).StartPosition, ((GPLString)((DataGrid)sender).SelectedItem).EndPosition);
             ((DataGrid)sender).Focus();
         }

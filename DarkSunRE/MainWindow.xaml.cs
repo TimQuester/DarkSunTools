@@ -135,7 +135,9 @@ namespace DarkSunRE
             var doc = Project.OpenedDocuments.Single(d => d.Name == ((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
             using (FileStream fs = new FileStream($"{doc.Path}.json", FileMode.OpenOrCreate))
             {
-                JsonSerializer.Serialize<GPLDocumentModel>(fs, doc);
+                JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions()
+                { WriteIndented = true };
+                JsonSerializer.Serialize<GPLDocumentModel>(fs, doc, jsonSerializerOptions);
             }
         }
         private void LoadJSONGPL_Click(object sender, RoutedEventArgs e)

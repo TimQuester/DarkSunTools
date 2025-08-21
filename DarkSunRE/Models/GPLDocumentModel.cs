@@ -119,7 +119,7 @@ namespace DarkSunRE.Models
             return result;
         }
  
-        private void ApplyStringChanges()
+        public void ApplyStringChanges()
         {
             foreach (var str in decodedStrings)
             {
@@ -214,7 +214,7 @@ namespace DarkSunRE.Models
         /// <summary>
         /// Обновление данных в байтах при изменении новых строк
         /// </summary>
-        public void RefreshNewBytes()
+        public void RefreshNewBytesAfterLoadJson()
         {
             originalBytes.CopyTo(newBytes);
             ApplyStringChanges();

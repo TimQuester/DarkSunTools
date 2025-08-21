@@ -156,7 +156,7 @@ namespace DarkSunRE
                 doc.decodedStrings = decodedStrings;
                 var layoutDocument = (LayoutDocument)layoutDocumentPane.SelectedContent;
                 ((DataGrid)layoutDocument.Content).ItemsSource = doc.decodedStrings;
-                doc.RefreshNewBytes();
+                doc.RefreshNewBytesAfterLoadJson();
             }
         }
     }

@@ -8,7 +8,7 @@ namespace DarkSunRE.Models
 {
     public class DecodedString
     {
-        public string Str { get; set; }
+        public string? Str { get; set; }
         public long Length { get; set; }
     }
 }

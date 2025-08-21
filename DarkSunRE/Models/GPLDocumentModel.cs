@@ -9,7 +9,7 @@ using WpfHexaEditor.Core;
 
 namespace DarkSunRE.Models
 {
-    internal class GPLDocumentModel
+    public class GPLDocumentModel
     {
         public byte[] originalBytes;
         public byte[] newBytes;
@@ -27,7 +27,7 @@ namespace DarkSunRE.Models
 
         }
         public string Name { get; set; }
-        public string Path;// { get; set; }
+        public string Path { get; set; }
         public List<GPLString> decodedStrings { get; set; } = new List<GPLString>();
 
         /// <summary>
@@ -35,7 +35,7 @@ namespace DarkSunRE.Models
         /// </summary>
         /// <param name="bytes">Поток с 7-битными символами</param>
         /// <returns>Список строк</returns>
-        List<GPLString> DecodeStrings(byte[] bytes)
+        static List<GPLString> DecodeStrings(byte[] bytes)
         {
             const int TextBufferSize = 3000;
             int strNumber = 0;
@@ -134,7 +134,7 @@ namespace DarkSunRE.Models
                 }
             }
         }
-        byte[] EncodeString(string str, int size)
+        static byte[] EncodeString(string str, int size)
         {
             using (MemoryStream outputStream = new MemoryStream())
             {

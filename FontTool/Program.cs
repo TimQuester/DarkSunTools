@@ -9,7 +9,7 @@ using System.Text;
 public class Glyph
 {
     public int Width { get; set; }
-    public byte[,] Pixels { get; set; }
+    public required byte[,] Pixels { get; set; }
     public int CharCode { get; set; }
     public bool IsEmpty => Width == 0 || Pixels == null;
 }

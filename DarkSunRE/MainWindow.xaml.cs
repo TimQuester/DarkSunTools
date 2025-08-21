@@ -47,15 +47,17 @@ namespace DarkSunRE
         }
 
         private void TreeViewItem_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-        {
-            string path = $"{Project.Path}\\{((TreeViewItem)sender).Header.ToString()}";
-            string name = ((TreeViewItem)sender).Header.ToString();
+        {            
+            string? name = ((TreeViewItem)sender).Header.ToString();
+            if (name == null)
+            {
+                MessageBox.Show("Ошибка определения имени документа");
+                return;
+            }
+            string path = $"{Project.Path}\\{name}";            
 
             if (!Project.OpenedDocuments.Any(d => d.Name == name))
-            {
-
-
-                MemoryStream streamOld, streamNew;
+            {                
                 var Document = new GPLDocumentModel(path, name);
                 LayoutDocument layoutDocument = new LayoutDocument();
                 layoutDocument.Title = Document.Name;
@@ -88,9 +90,7 @@ namespace DarkSunRE
                 dataGrid.Columns.Add(new DataGridCheckBoxColumn() { Header = "Real", Binding = new Binding(nameof(GPLString.RealString)) });
 
                 dataGrid.SelectedCellsChanged += DataGrid_SelectedCellsChanged;
-
-                streamOld = new MemoryStream(Document.originalBytes);
-                if (Document.newBytes != null) streamNew = new MemoryStream(Document.newBytes);
+                
                 hvp.LoadBytes(Document.originalBytes, Document.newBytes);
                 layoutDocument.Content = dataGrid;
                 layoutDocumentPane.Children.Add(layoutDocument);
@@ -152,11 +152,17 @@ namespace DarkSunRE
             using (FileStream fs = new FileStream($"{doc.Path}.json", FileMode.Open))
             {
                 var decodedStrings = JsonSerializer.Deserialize<List<GPLString>>(fs);
-                //((DataGrid)((LayoutDocument)layoutDocumentPane.SelectedContent).Content).ItemsSource = doc.decodedStrings;
-                doc.decodedStrings = decodedStrings;
-                var layoutDocument = (LayoutDocument)layoutDocumentPane.SelectedContent;
-                ((DataGrid)layoutDocument.Content).ItemsSource = doc.decodedStrings;
-                doc.RefreshNewBytesAfterLoadJson();
+                if (decodedStrings != null)
+                {
+                    doc.decodedStrings = decodedStrings;
+                    var layoutDocument = (LayoutDocument)layoutDocumentPane.SelectedContent;
+                    ((DataGrid)layoutDocument.Content).ItemsSource = doc.decodedStrings;
+                    doc.RefreshNewBytesAfterLoadJson();
+                }
+                else
+                {
+                    MessageBox.Show("Загрузка данных не удалась.");
+                }
             }
         }
     }

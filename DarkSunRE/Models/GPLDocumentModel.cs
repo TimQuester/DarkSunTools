@@ -119,7 +119,7 @@ namespace DarkSunRE.Models
             return result;
         }
  
-        public void ApplyStringChanges()
+        private void ApplyStringChanges()
         {
             foreach (var str in decodedStrings)
             {
@@ -210,6 +210,14 @@ namespace DarkSunRE.Models
 
                 return outputStream.ToArray();
             }
+        }
+        /// <summary>
+        /// Обновление данных в байтах при изменении новых строк
+        /// </summary>
+        public void RefreshNewBytes()
+        {
+            originalBytes.CopyTo(newBytes);
+            ApplyStringChanges();
         }
     }
 }

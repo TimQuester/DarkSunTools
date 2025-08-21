@@ -62,6 +62,11 @@ namespace DarkSunRE
                 DataGrid dataGrid = new DataGrid();
 
                 dataGrid.AutoGenerateColumns = false;
+                dataGrid.CanUserAddRows = false;
+                dataGrid.CanUserDeleteRows = false;
+                dataGrid.CanUserReorderColumns = false;
+                dataGrid.CanUserSortColumns = false;
+
                 if (Resources["GrayedOutRowStyle"] is Style grayStyle)
                 {
                     dataGrid.RowStyle = grayStyle;
@@ -97,9 +102,10 @@ namespace DarkSunRE
 
         private void DataGrid_SelectedCellsChanged(object sender, SelectedCellsChangedEventArgs e)
         {
-            if (((DataGrid)sender).SelectedItem == null)
+            var str = (GPLString)((DataGrid)sender).SelectedItem;
+            if (str?.StartPosition == null)
                 return;
-            hvp.SetPosition(((GPLString)((DataGrid)sender).SelectedItem).StartPosition, ((GPLString)((DataGrid)sender).SelectedItem).EndPosition);
+            hvp.SetPosition(str.StartPosition, str.EndPosition);
             ((DataGrid)sender).Focus();
         }
 
@@ -133,20 +139,24 @@ namespace DarkSunRE
         private void SaveJSONGPL_Click(object sender, RoutedEventArgs e)
         {
             var doc = Project.OpenedDocuments.Single(d => d.Name == ((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
-            using (FileStream fs = new FileStream($"{doc.Path}.json", FileMode.OpenOrCreate))
+            using (FileStream fs = new FileStream($"{doc.Path}.json", FileMode.Create))
             {
                 JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions()
                 { WriteIndented = true };
-                JsonSerializer.Serialize<GPLDocumentModel>(fs, doc, jsonSerializerOptions);
+                JsonSerializer.Serialize<List<GPLString>>(fs, doc.decodedStrings, jsonSerializerOptions);
             }
         }
         private void LoadJSONGPL_Click(object sender, RoutedEventArgs e)
         {
-            var doc = Project.OpenedDocuments.Single(d => d.Name == ((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
-            using (FileStream fs = new FileStream($"{doc.Path}.json", FileMode.OpenOrCreate))
+            var doc = Project.OpenedDocuments.Single(d => d.Name == ((LayoutDocument)layoutDocumentPane.SelectedContent).Title);            
+            using (FileStream fs = new FileStream($"{doc.Path}.json", FileMode.Open))
             {
-                doc = JsonSerializer.Deserialize<GPLDocumentModel>(fs);
-                ((DataGrid)((LayoutDocument)layoutDocumentPane.SelectedContent).Content).ItemsSource = doc.decodedStrings;
+                var decodedStrings = JsonSerializer.Deserialize<List<GPLString>>(fs);
+                //((DataGrid)((LayoutDocument)layoutDocumentPane.SelectedContent).Content).ItemsSource = doc.decodedStrings;
+                doc.decodedStrings = decodedStrings;
+                var layoutDocument = (LayoutDocument)layoutDocumentPane.SelectedContent;
+                ((DataGrid)layoutDocument.Content).ItemsSource = doc.decodedStrings;
+                doc.RefreshNewBytes();
             }
         }
     }

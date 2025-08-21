@@ -15,8 +15,11 @@ namespace DarkSunRE.Models
         private bool _realString;
         public int StringNumber { get; set; }
         public int StartPosition { get; set; }
-        public int EndPosition { get; set; }        
+        public int EndPosition { get; set; }
         public string OriginalString { get; set; }
+        public byte[] OriginalBytes;
+        public byte[] NewBytes;
+        public int OriginalSize { get => OriginalString.Length; }
         public string NewString
         {
             get => _newString;
@@ -27,13 +30,23 @@ namespace DarkSunRE.Models
                 OnPropertyChanged();
             }
         }
-
-        public byte[] OriginalBytes;// { get; set; }
-        public byte[] NewBytes;// { get; set; }
-        public int OriginalSize { get { return OriginalString.Length; } }
-        public int NewSize { get { return _newSize; } set { _newSize = value; OnPropertyChanged(); } }
-
-        public bool RealString { get { return _realString; } set { _realString = value; OnPropertyChanged(); } }
+        public int NewSize {
+            get => _newSize;
+            set
+            {
+                _newSize = value;
+                OnPropertyChanged();
+            }
+        }
+        public bool RealString
+        {
+            get => _realString;
+            set
+            {
+                _realString = value;
+                OnPropertyChanged();
+            }
+        }
 
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string name = null)

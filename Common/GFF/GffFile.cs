@@ -40,125 +40,56 @@ namespace DSunTools.Common.Gff
             return new GffFile(gffFileBytes, tablesByTag);
         }
 
-        //private static Dictionary<string, GffiTable> CreateTables(byte[] bytes)
-        //{
-        //    var buffer = new ReadOnlySpan<byte>(bytes);
-        //    int indexStart = BitConverter.ToInt32(buffer.Slice(12));
-        //    buffer = buffer.Slice(indexStart);
-
-        //    // Skip two int values
-        //    buffer = buffer.Slice(8);
-
-        //    var tablesByTag = new Dictionary<string, GffiTable>();
-        //    var secondaryTableDescriptorForTag = new Dictionary<string, SecondaryTableDescriptor>();
-
-        //    int numberOfTags = BitConverter.ToInt16(buffer);
-        //    buffer = buffer.Slice(2);
-
-        //    for (int iTag = 0; iTag < numberOfTags; iTag++)
-        //    {
-        //        string tag = ReadTag(ref buffer);
-        //        if (tablesByTag.ContainsKey(tag))
-        //        {
-        //            throw new InvalidOperationException("Encountered a second table for tag " + tag);
-        //        }
-
-        //        int numberOfChunksIfPrimary = BitConverter.ToInt32(buffer);
-        //        buffer = buffer.Slice(4);
-
-        //        if (numberOfChunksIfPrimary > 0)
-        //        {
-        //            int tableStartPosition = indexStart + (bytes.Length - buffer.Length) - 4;
-        //            var table = PrimaryGffiTable.Create(bytes, tableStartPosition);
-        //            tablesByTag.Add(tag, table);
-        //            buffer = buffer.Slice(table.GetTotalSize() - 4);
-        //        }
-        //        else
-        //        {
-        //            buffer = buffer.Slice(4); // Skip one int
-
-        //            int secondaryTableIndex = BitConverter.ToInt32(buffer);
-        //            buffer = buffer.Slice(4);
-
-        //            int resourceNumberingOffset = indexStart + (bytes.Length - buffer.Length);
-        //            secondaryTableDescriptorForTag.Add(tag,
-        //                new SecondaryTableDescriptor(secondaryTableIndex, resourceNumberingOffset));
-
-        //            int numberSegmentCount = BitConverter.ToInt32(buffer);
-        //            buffer = buffer.Slice(4);
-
-        //            for (int i = 0; i < numberSegmentCount; i++)
-        //            {
-        //                buffer = buffer.Slice(8); // Skip two ints
-        //            }
-        //        }
-        //    }
-
-        //    var gffiTable = tablesByTag["GFFI"];
-        //    foreach (var tagAndDescriptor in secondaryTableDescriptorForTag)
-        //    {
-        //        var descriptor = tagAndDescriptor.Value;
-        //        int secondaryTableOffset = gffiTable.GetOffset(descriptor.SecondaryTableIndex);
-        //        tablesByTag.Add(tagAndDescriptor.Key, SecondaryGffiTable.Create(
-        //            bytes, secondaryTableOffset, descriptor.ResourceNumberingOffset));
-        //    }
-
-        //    return tablesByTag;
-        //}
-
         private static Dictionary<string, GffiTable> CreateTables(byte[] bytes)
         {
-            // Чтение 32-битного значения с little-endian порядком
-            int indexStart = bytes[12] | (bytes[13] << 8) | (bytes[14] << 16) | (bytes[15] << 24);
+            int indexStart = BitConverter.ToInt32(bytes, 12);
+            int position = indexStart;
 
-            ReadOnlySpan<byte> buffer = bytes.AsSpan(indexStart);
-
-            // Пропускаем два int значения (8 байт)
-            buffer = buffer.Slice(8);
-
-            // Чтение 16-битного значения с little-endian порядком
-            int numberOfTags = buffer[0] | (buffer[1] << 8);
-            buffer = buffer.Slice(2);
+            // Skip two int values
+            position += 8;
 
             var tablesByTag = new Dictionary<string, GffiTable>();
             var secondaryTableDescriptorForTag = new Dictionary<string, SecondaryTableDescriptor>();
 
+            // Read number of tags (short)
+            int numberOfTags = BitConverter.ToInt16(bytes, position);
+            position += 2;
+
             for (int iTag = 0; iTag < numberOfTags; iTag++)
             {
-                string tag = ReadTag(ref buffer);
+                string tag = ReadTag(bytes, ref position);
                 if (tablesByTag.ContainsKey(tag))
+                {
                     throw new InvalidOperationException("Encountered a second table for tag " + tag);
+                }
 
-                // Чтение 32-битного значения с little-endian порядком
-                int numberOfChunksIfPrimary = buffer[0] | (buffer[1] << 8) | (buffer[2] << 16) | (buffer[3] << 24);
-                buffer = buffer.Slice(4);
+                int numberOfChunksIfPrimary = BitConverter.ToInt32(bytes, position);
+                position += 4;
 
                 if (numberOfChunksIfPrimary > 0)
                 {
-                    int tableStartPosition = indexStart + (bytes.Length - buffer.Length) - 4;
+                    int tableStartPosition = position - 4;
                     var table = PrimaryGffiTable.Create(bytes, tableStartPosition);
                     tablesByTag.Add(tag, table);
-                    buffer = buffer.Slice(table.GetTotalSize() - 4);
+                    position = tableStartPosition + table.GetTotalSize();
                 }
                 else
                 {
-                    buffer = buffer.Slice(4); // Пропускаем один int
+                    position += 4; // Skip one int
 
-                    // Чтение 32-битного значения с little-endian порядком
-                    int secondaryTableIndex = buffer[0] | (buffer[1] << 8) | (buffer[2] << 16) | (buffer[3] << 24);
-                    buffer = buffer.Slice(4);
+                    int secondaryTableIndex = BitConverter.ToInt32(bytes, position);
+                    position += 4;
 
-                    int resourceNumberingOffset = indexStart + (bytes.Length - buffer.Length);
+                    int resourceNumberingOffset = position;
                     secondaryTableDescriptorForTag.Add(tag,
                         new SecondaryTableDescriptor(secondaryTableIndex, resourceNumberingOffset));
 
-                    // Чтение 32-битного значения с little-endian порядком
-                    int numberSegmentCount = buffer[0] | (buffer[1] << 8) | (buffer[2] << 16) | (buffer[3] << 24);
-                    buffer = buffer.Slice(4);
+                    int numberSegmentCount = BitConverter.ToInt32(bytes, position);
+                    position += 4;
 
                     for (int i = 0; i < numberSegmentCount; i++)
                     {
-                        buffer = buffer.Slice(8); // Пропускаем два int
+                        position += 8; // Skip two ints
                     }
                 }
             }
@@ -175,10 +106,10 @@ namespace DSunTools.Common.Gff
             return tablesByTag;
         }
 
-        private static string ReadTag(ref ReadOnlySpan<byte> buffer)
+        private static string ReadTag(byte[] buffer, ref int position)
         {
-            string tag = Encoding.ASCII.GetString(buffer.Slice(0, 4));
-            buffer = buffer.Slice(4);
+            string tag = Encoding.ASCII.GetString(buffer, position, 4);
+            position += 4;
             return tag;
         }
 

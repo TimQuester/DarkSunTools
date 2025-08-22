@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TextTools", "TextTools\Text
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DarkSunRE", "DarkSunRE\DarkSunRE.csproj", "{38E3FEF1-A4AC-4209-8312-FEB55927D7BD}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ToolsTests", "ToolsTests\ToolsTests.csproj", "{ADE33E11-235E-44FC-BF36-A735FDF3D694}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,10 @@ Global
 		{38E3FEF1-A4AC-4209-8312-FEB55927D7BD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{38E3FEF1-A4AC-4209-8312-FEB55927D7BD}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{38E3FEF1-A4AC-4209-8312-FEB55927D7BD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ADE33E11-235E-44FC-BF36-A735FDF3D694}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ADE33E11-235E-44FC-BF36-A735FDF3D694}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ADE33E11-235E-44FC-BF36-A735FDF3D694}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ADE33E11-235E-44FC-BF36-A735FDF3D694}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

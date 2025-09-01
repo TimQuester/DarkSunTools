@@ -22,7 +22,7 @@ namespace DSunTools.Common.Gff
             }
         }
 
-        private class SecondaryTableDescriptor
+        private sealed class SecondaryTableDescriptor
         {
             public int SecondaryTableIndex { get; }
             public int ResourceNumberingOffset { get; }

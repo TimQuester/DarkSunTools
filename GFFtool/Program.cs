@@ -11,10 +11,10 @@ namespace Dsun.GffTool
 {
     class Program
     {
-        private class Options : IOptionsWithHelp
+        private sealed class Options : IOptionsWithHelp
         {
             public string GffFile { get; }
-            public bool ListContents { get; }
+            public bool isListContents { get; }
             public string ExtractToDir { get; }
             public string ReplaceWith { get; }
             public string Tag { get; }
@@ -31,7 +31,7 @@ namespace Dsun.GffTool
                 bool helpRequested)
             {
                 GffFile = gffFile;
-                ListContents = listContents;
+                isListContents = listContents;
                 ExtractToDir = extractToDir;
                 ReplaceWith = replaceWith;
                 Tag = tag;
@@ -40,15 +40,15 @@ namespace Dsun.GffTool
             }
         }
 
-        private class OptionsProcessor : OptionsProcessor<Options>
+        private sealed class OptionsProcessor : OptionsProcessor<Options>
         {
             public override Options ParseArgs(string[] args)
             {
-                string gffFile = null;
+                string? gffFile = null;
                 bool listContents = false;
-                string extractToDir = null;
-                string replaceWith = null;
-                string tag = null;
+                string? extractToDir = null;
+                string? replaceWith = null;
+                string? tag = null;
                 int? number = null;
                 bool helpRequested = false;
 
@@ -60,7 +60,7 @@ namespace Dsun.GffTool
                     {
                         string[] parts = arg.Split(new[] { '=' }, 2);
                         string optionName = parts[0];
-                        string optionValue = parts.Length > 1 ? parts[1] : null;
+                        string? optionValue = parts.Length > 1 ? parts[1] : null;
 
                         switch (optionName)
                         {
@@ -104,13 +104,12 @@ namespace Dsun.GffTool
                         throw new ArgumentException($"Invalid argument format: {arg}");
                     }
                 }
-
                 return new Options(gffFile, listContents, extractToDir, replaceWith, tag, number, helpRequested);
             }
 
             public override bool IsUsageValid(Options options)
             {
-                int commandCount = (options.ListContents ? 1 : 0)
+                int commandCount = (options.isListContents ? 1 : 0)
                     + (options.ExtractToDir != null ? 1 : 0)
                     + (options.ReplaceWith != null ? 1 : 0);
 
@@ -142,7 +141,7 @@ namespace Dsun.GffTool
                 byte[] bytes = File.ReadAllBytes(options.GffFile);
                 var gffFile = GffFile.Create(bytes);
 
-                if (options.ListContents)
+                if (options.isListContents)
                 {
                     ListContents(gffFile, bytes.Length);
                 }

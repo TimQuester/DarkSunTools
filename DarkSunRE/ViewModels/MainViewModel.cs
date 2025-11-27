@@ -5,6 +5,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
+using System.IO;
 
 namespace DarkSunRE.ViewModels
 {
@@ -28,15 +29,6 @@ namespace DarkSunRE.ViewModels
 
         public bool IsModified;
 
-        //private bool CanCreateProject()
-        //{
-        //    return !string.IsNullOrEmpty(ProjectName) &&
-        //           !string.IsNullOrEmpty(OriginalGamePath) &&
-        //           !string.IsNullOrEmpty(ModifiedGamePath) &&
-        //           _fileService.DirectoryExists(OriginalGamePath);
-        //}
-        //public ObservableCollection<RecentProject> RecentProjects { get; }
-
         public MainViewModel(IProjectService projectService, IDialogService dialogService, IStatusService statusService, IFileService fileService, ProjectTreeViewModel projectTreeViewModel)
         {
             _projectService = projectService;
@@ -58,10 +50,6 @@ namespace DarkSunRE.ViewModels
             OpenProjectCommand = new RelayCommand(ExecuteOpenProject);
             SaveProjectCommand = new RelayCommand(ExecuteSave, CanExecuteSave);
             ExitCommand = new RelayCommand(ExecuteExit);
-
-            //RecentProjects = new ObservableCollection<RecentProject>();
-
-            //LoadRecentProjects();
         }
 
         private void OnResourceChanged(object? sender, Services.ResourceEventArgs e)
@@ -202,10 +190,18 @@ namespace DarkSunRE.ViewModels
         private void ExecuteOpenProject()
         {
             var filePath = _dialogService.ShowOpenFileDialog("Project files|*.dsproj");
-            if (!string.IsNullOrEmpty(filePath))
+            if (string.IsNullOrEmpty(filePath))
+                return;
+
+            var project = _projectService.LoadProject(filePath);
+            if (project == null)
             {
-                // Логика открытия проекта
+                _statusService.ShowError($"Failed to open project: {Path.GetFileName(filePath)}");
+                return;
             }
+
+            CurrentProject = project;
+            _statusService.ShowSuccess($"Project '{project.ProjectName ?? Path.GetFileNameWithoutExtension(filePath)}' opened.");
         }
 
         private void ExecuteSave()

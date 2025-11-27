@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.IO;
 
 namespace DSunTools.Common.Gff
 {
@@ -94,7 +95,12 @@ namespace DSunTools.Common.Gff
                 }
             }
 
-            var gffiTable = tablesByTag["GFFI"];
+            // Validate presence of GFFI index table
+            if (!tablesByTag.TryGetValue("GFFI", out var gffiTable))
+            {
+                throw new InvalidDataException("Invalid GFF file: missing 'GFFI' index table. File may be corrupt or not a GFF file.");
+            }
+
             foreach (var tagAndDescriptor in secondaryTableDescriptorForTag)
             {
                 var descriptor = tagAndDescriptor.Value;

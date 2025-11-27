@@ -2,11 +2,9 @@
 using DarkSunRE.Models;
 using DarkSunRE.Services;
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
@@ -18,6 +16,7 @@ namespace DarkSunRE.ViewModels
     {
         private readonly IGameDefinitionService _gameDefinitionService;
         private readonly IFileService _fileService;
+        private readonly IUiService _uiService;
         private readonly IStatusService _statusService;
 
         private GameDefinition _selectedGame;
@@ -34,11 +33,13 @@ namespace DarkSunRE.ViewModels
         public CreateProjectViewModel(
             IGameDefinitionService gameDefinitionService,
             IFileService fileService,
+            IUiService uiService,
             IStatusService statusService)
         {
-            _gameDefinitionService = gameDefinitionService;
-            _fileService = fileService;
-            _statusService = statusService;
+            _gameDefinitionService = gameDefinitionService ?? throw new ArgumentNullException(nameof(gameDefinitionService));
+            _fileService = fileService ?? throw new ArgumentNullException(nameof(fileService));
+            _uiService = uiService ?? throw new ArgumentNullException(nameof(uiService));
+            _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
 
             Title = "Create New Project";
             AvailableGames = _gameDefinitionService.GetSupportedGames();
@@ -130,21 +131,21 @@ namespace DarkSunRE.ViewModels
 
         private void BrowseOriginalGame()
         {
-            var path = _fileService.ShowFolderDialog("Select original game folder");
+            var path = _uiService.ShowFolderDialog("Select original game folder");
             if (!string.IsNullOrEmpty(path))
                 OriginalGamePath = path;
         }
 
         private void BrowseModifiedGame()
         {
-            var path = _fileService.ShowFolderDialog("Select modified game folder");
+            var path = _uiService.ShowFolderDialog("Select modified game folder");
             if (!string.IsNullOrEmpty(path))
                 ModifiedGamePath = path;
         }
 
         private void BrowseGitRepository()
         {
-            var path = _fileService.ShowFolderDialog("Select Git repository folder");
+            var path = _uiService.ShowFolderDialog("Select Git repository folder");
             if (!string.IsNullOrEmpty(path))
                 GitRepositoryPath = path;
         }
@@ -225,6 +226,7 @@ namespace DarkSunRE.ViewModels
                 _statusService.Clear();
             }
         }
+
         private bool CanCreateProject()
         {
             // Проверяем основные условия
@@ -233,9 +235,6 @@ namespace DarkSunRE.ViewModels
 
             if (string.IsNullOrWhiteSpace(OriginalGamePath))
                 return false;
-
-            //if (!IsValidGamePath)
-            //    return false;
 
             if (SelectedGame == null)
                 return false;
@@ -250,31 +249,12 @@ namespace DarkSunRE.ViewModels
 
             return true;
         }
+
         private void Cancel()
         {
             OnCancel();
         }
-        private void ValidateGamePath()
-        {
-            //if (SelectedGame != null && !string.IsNullOrEmpty(OriginalGamePath))
-            //{
-            //    IsValidGamePath = _gameValidationService.ValidateGamePath(OriginalGamePath, SelectedGame.Type);
 
-            //    if (IsValidGamePath)
-            //    {
-            //        var version = _gameValidationService.DetectGameVersion(OriginalGamePath, SelectedGame.Type);
-            //        _statusService.ShowMessage($"Detected {SelectedGame.Name} version {version}");
-            //    }
-            //    else
-            //    {
-            //        _statusService.ShowWarning("Selected folder doesn't appear to contain the game files");
-            //    }
-            //}
-            //else
-            //{
-            //    IsValidGamePath = false;
-            //}
-        }
         private bool ValidateProjectData()
         {
             // Проверка имени проекта
@@ -291,15 +271,9 @@ namespace DarkSunRE.ViewModels
                 return false;
             }
 
-            // Проверка валидности игровых файлов
-            //if (!IsValidGamePath)
-            //{
-            //    _statusService.ShowError("Selected folder doesn't contain valid game files");
-            //    return false;
-            //}
-
             return true;
         }
+
         private bool CreateProjectDirectories()
         {
             try
@@ -338,6 +312,7 @@ namespace DarkSunRE.ViewModels
                 return false;
             }
         }
+
         private bool CopyGameFiles()
         {
             try
@@ -377,6 +352,7 @@ namespace DarkSunRE.ViewModels
                 return false;
             }
         }
+
         private ProjectCreationData CreateProjectFile()
         {
             _statusService.ShowProgress("Creating project file...", 90);
@@ -389,7 +365,6 @@ namespace DarkSunRE.ViewModels
                 GitRepositoryPath = CreateGitRepository ? ModifiedGamePath : null,
                 GameType = SelectedGame.Type,
                 CreatedDate = DateTime.Now,
-                //Version = _gameValidationService.DetectGameVersion(OriginalGamePath, SelectedGame.Type)
             };
 
             // Сохраняем метаданные проекта

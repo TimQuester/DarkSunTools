@@ -1,26 +1,20 @@
 ﻿using DarkSunRE.Models;
-using Microsoft.Win32;
-using Microsoft.Win32;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
 
 namespace DarkSunRE.Services
 {
     public class FileService : IFileService
     {
         private readonly IGameDefinitionService _gameDefinitionService;
-        
-        private readonly Window _owner;
 
         public FileService(IGameDefinitionService gameDefinitionService)
         {
             _gameDefinitionService = gameDefinitionService;
-            _owner = Application.Current.MainWindow;
         }
 
         public bool FileExists(string path) => File.Exists(path);
@@ -48,55 +42,6 @@ namespace DarkSunRE.Services
         public long GetFileSize(string path) => new FileInfo(path).Length;
         public DateTime GetFileLastWriteTime(string path) => File.GetLastWriteTime(path);
         public DateTime GetFileCreationTime(string path) => File.GetCreationTime(path);
-
-        public string ShowOpenFileDialog(string filter = "All files|*.*", string initialDirectory = null, string title = "Open File")
-        {
-            var dialog = new OpenFileDialog
-            {
-                Filter = filter,
-                InitialDirectory = initialDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                Title = title
-            };
-
-            return dialog.ShowDialog(_owner) == true ? dialog.FileName : null;
-        }
-
-        public string[] ShowOpenMultipleFilesDialog(string filter = "All files|*.*", string initialDirectory = null, string title = "Open Files")
-        {
-            var dialog = new OpenFileDialog
-            {
-                Filter = filter,
-                InitialDirectory = initialDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                Title = title,
-                Multiselect = true
-            };
-
-            return dialog.ShowDialog() == true ? dialog.FileNames : Array.Empty<string>();
-        }
-
-        public string ShowSaveFileDialog(string defaultFileName = null, string filter = "All files|*.*", string initialDirectory = null, string title = "Save File")
-        {
-            var dialog = new SaveFileDialog
-            {
-                Filter = filter,
-                InitialDirectory = initialDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                Title = title,
-                FileName = defaultFileName
-            };
-
-            return dialog.ShowDialog() == true ? dialog.FileName : null;
-        }
-
-        public string ShowFolderDialog(string description = "Select folder", string initialDirectory = null)
-        {
-            var dialog = new OpenFolderDialog
-            {
-                Title = description,
-                InitialDirectory = initialDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-            };
-
-            return dialog.ShowDialog(_owner) == true ? dialog.FolderName : null;
-        }
 
         public string CombinePaths(params string[] paths) => Path.Combine(paths);
         public string GetFileName(string path) => Path.GetFileName(path);

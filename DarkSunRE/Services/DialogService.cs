@@ -7,17 +7,20 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Win32;
 using System.Windows;
+using DarkSunRE.Services;
 
 namespace DarkSunRE.Services
 {
     public class DialogService : IDialogService
     {
         private readonly IServiceProvider _serviceProvider;
+        private readonly IUiService _uiService;
         private readonly Dictionary<Type, Type> _viewModelToViewMapping = new();
 
-        public DialogService(IServiceProvider serviceProvider)
+        public DialogService(IServiceProvider serviceProvider, IUiService uiService)
         {
             _serviceProvider = serviceProvider;
+            _uiService = uiService;
         }
 
         public TViewModel CreateViewModel<TViewModel>() where TViewModel : BaseDialogViewModel
@@ -69,17 +72,17 @@ namespace DarkSunRE.Services
 
         public string ShowFolderDialog(string description, string initialDirectory = null)
         {
-            throw new NotImplementedException();
+            return _uiService.ShowFolderDialog(description, initialDirectory);
         }
 
         public string ShowOpenFileDialog(string filter, string initialDirectory = null)
         {
-            throw new NotImplementedException();
+            return _uiService.ShowOpenFileDialog(filter, initialDirectory, "Open File");
         }
 
         public string ShowSaveFileDialog(string filter, string initialDirectory = null)
         {
-            throw new NotImplementedException();
+            return _uiService.ShowSaveFileDialog(null, filter, initialDirectory, "Save File");
         }        
     }
 }

@@ -1,6 +1,9 @@
 ﻿using DarkSunRE.Models;
+using System;
 using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace DarkSunRE.Services
 {
@@ -27,12 +30,6 @@ namespace DarkSunRE.Services
         long GetFileSize(string path);
         DateTime GetFileLastWriteTime(string path);
         DateTime GetFileCreationTime(string path);
-
-        // Диалоги выбора файлов/папок
-        string ShowOpenFileDialog(string filter = "All files|*.*", string initialDirectory = null, string title = "Open File");
-        string[] ShowOpenMultipleFilesDialog(string filter = "All files|*.*", string initialDirectory = null, string title = "Open Files");
-        string ShowSaveFileDialog(string defaultFileName = null, string filter = "All files|*.*", string initialDirectory = null, string title = "Save File");
-        string ShowFolderDialog(string description = "Select folder", string initialDirectory = null);
 
         // Пути
         string CombinePaths(params string[] paths);

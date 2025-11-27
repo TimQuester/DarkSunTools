@@ -2,8 +2,10 @@
 using DarkSunRE.ViewModels;
 using DarkSunRE.Views;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Windows;
+using System.Threading.Tasks;
 
 namespace DarkSunRE
 {
@@ -20,10 +22,27 @@ namespace DarkSunRE
 
             RegisterDialogs(ServiceProvider);
 
-            // Resolve VM and create main window via DI (preserves constructor injection)
-            var mainViewModel = ServiceProvider.GetRequiredService<MainViewModel>();
+            // Global exception handlers — логируем необработанные ошибки
+            var logger = ServiceProvider.GetRequiredService<ILogger<App>>();
+            Application.Current.DispatcherUnhandledException += (s, args) =>
+            {
+                logger.LogError(args.Exception, "Unhandled UI exception");
+                args.Handled = true;
+            };
 
-            // Resolve MainWindow via DI (will throw early if registration/problem exists)
+            TaskScheduler.UnobservedTaskException += (s, args) =>
+            {
+                logger.LogError(args.Exception, "Unobserved task exception");
+                args.SetObserved();
+            };
+
+            AppDomain.CurrentDomain.UnhandledException += (s, args) =>
+            {
+                if (args.ExceptionObject is Exception ex)
+                    logger.LogCritical(ex, "Unhandled domain exception");
+            };
+
+            var mainViewModel = ServiceProvider.GetRequiredService<MainViewModel>();
             var mainWindow = ServiceProvider.GetRequiredService<MainWindow>();
 
             mainWindow.DataContext = mainViewModel;
@@ -32,12 +51,22 @@ namespace DarkSunRE
 
         private IServiceProvider ConfigureServices(IServiceCollection services)
         {
+            // Register logging providers first
+            services.AddLogging(builder =>
+            {
+                // avoid AddDebug if package not referenced
+                builder.AddConsole();
+            });
+
             services.AddSingleton<IStatusService, StatusService>();
             services.AddSingleton<IDialogService, DialogService>();
             services.AddSingleton<IProjectService, ProjectService>();
             services.AddSingleton<IResourceService, ResourceService>();
             services.AddSingleton<IFileService, FileService>();
             services.AddSingleton<IGameDefinitionService, GameDefinitionService>();
+
+            // register UI service (dialogs) separately
+            services.AddSingleton<IUiService, UiService>();
 
             services.AddTransient<MainViewModel>();
             services.AddTransient<CreateProjectViewModel>();

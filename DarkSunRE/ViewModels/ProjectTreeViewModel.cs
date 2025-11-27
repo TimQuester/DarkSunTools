@@ -1,0 +1,193 @@
+﻿using DarkSunRE.Commands;
+using DarkSunRE.Models;
+using DarkSunRE.Services;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Input;
+using System.Windows.Media;
+
+namespace DarkSunRE.ViewModels
+{
+    public class ProjectTreeViewModel : INotifyPropertyChanged
+    {
+        private readonly IProjectService _projectService;
+        private readonly IStatusService _statusService;
+        private Project _currentProject;
+
+        public ProjectTreeViewModel(IProjectService projectService, IStatusService statusService)
+        {
+            _projectService = projectService;
+            _statusService = statusService;
+
+            RootNodes = new ObservableCollection<ProjectNode>();
+
+            // Команды для работы с деревом
+            ExpandAllCommand = new RelayCommand(ExpandAll);
+            CollapseAllCommand = new RelayCommand(CollapseAll);
+            RefreshCommand = new RelayCommand(RefreshTree);
+        }
+
+        public Project CurrentProject
+        {
+            get => _currentProject;
+            set
+            {
+                if (SetProperty(ref _currentProject, value))
+                {
+                    LoadProjectTree();
+                }
+            }
+        }
+
+        public ObservableCollection<ProjectNode> RootNodes { get; }
+
+        public ICommand ExpandAllCommand { get; }
+        public ICommand CollapseAllCommand { get; }
+        public ICommand RefreshCommand { get; }
+        public ICommand DoubleClickCommand { get; }
+
+        private void LoadProjectTree()
+        {
+            RootNodes.Clear();
+
+            if (CurrentProject == null)
+                return;
+
+            try
+            {
+                //_statusService.ShowProgress("Loading project tree...");
+
+                var projectNode = new ProjectNode
+                {
+                    Name = CurrentProject.ProjectName,
+                    ItemType = ProjectItemType.Project,
+                    Item = CurrentProject,
+                    IsExpanded = true
+                };
+
+                // Загружаем GFF файлы
+                foreach (var file in CurrentProject.Files)
+                {
+                    var fileNode = new ProjectNode
+                    {
+                        Name = $"{file.Name} ({file.Resources?.Count ?? 0} resources)",
+                        ItemType = ProjectItemType.GffFile,
+                        Item = file,
+                        IsExpanded = false
+                    };
+
+                    // Загружаем file
+                    if (file.Resources != null)
+                    {
+                        foreach (var resource in file.Resources)
+                        {
+                            var resourceNode = new ProjectNode
+                            {
+                                Name = $"{resource.Tag}-{resource.Number} ({resource.Type})",
+                                ItemType = ProjectItemType.Resource,
+                                Item = resource,
+                                Tag = resource.Tag,
+                                ResourceNumber = resource.Number
+                            };
+
+                            fileNode.Children.Add(resourceNode);
+                        }
+                    }
+
+                    projectNode.Children.Add(fileNode);
+                }
+
+                RootNodes.Add(projectNode);
+                _statusService.ShowSuccess("Project tree loaded");
+            }
+            catch (Exception ex)
+            {
+                _statusService.ShowError("Failed to load project tree", ex);
+            }
+        }
+
+        private void ExpandAll()
+        {
+            foreach (var node in RootNodes)
+            {
+                SetNodeExpanded(node, true);
+            }
+        }
+
+        private void CollapseAll()
+        {
+            foreach (var node in RootNodes)
+            {
+                SetNodeExpanded(node, false);
+            }
+        }
+
+        private void RefreshTree()
+        {
+            LoadProjectTree();
+        }
+
+        private void SetNodeExpanded(ProjectNode node, bool isExpanded)
+        {
+            node.IsExpanded = isExpanded;
+            foreach (var child in node.Children)
+            {
+                SetNodeExpanded(child, isExpanded);
+            }
+        }
+
+        public void OpenResource(string tag, int number)
+        {
+            // Логика открытия ресурса в редакторе
+            var resource = FindResource(tag, number);
+            string gffFile = $"{tag} - {number}";
+            if (resource != null)
+            {
+                // Открываем ресурс (можно через событие или сервис)
+                ResourceOpened?.Invoke(this, new ResourceEventArgs(ProjectAction.ResourceOpened, CurrentProject, resource, gffFile));
+            }
+        }
+
+        private ResourceInfo FindResource(string tag, int number)
+        {
+            foreach (var projectNode in RootNodes)
+            {
+                foreach (var fileNode in projectNode.Children)
+                {
+                    foreach (var resourceNode in fileNode.Children)
+                    {
+                        if (resourceNode.Tag == tag && resourceNode.ResourceNumber == number)
+                        {
+                            return resourceNode.Item as ResourceInfo;
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        public event EventHandler<ResourceEventArgs> ResourceOpened;
+
+        // INotifyPropertyChanged
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string propertyName = null)
+        {
+            if (EqualityComparer<T>.Default.Equals(field, value)) return false;
+            field = value;
+            OnPropertyChanged(propertyName);
+            return true;
+        }
+    }
+}
+ 

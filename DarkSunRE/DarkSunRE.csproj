@@ -11,11 +11,12 @@
 
   <ItemGroup>
     <PackageReference Include="Extended.Wpf.Toolkit" Version="4.7.25104.5739" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.8" />
     <PackageReference Include="WPFHexaEditor" Version="2.1.7" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Views\" />
+    <ProjectReference Include="..\Common\Common.csproj" />
   </ItemGroup>
 
 </Project>

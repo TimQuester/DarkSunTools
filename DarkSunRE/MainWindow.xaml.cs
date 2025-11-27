@@ -1,4 +1,5 @@
 ﻿using DarkSunRE.Models;
+using DarkSunRE.ViewModels;
 using Microsoft.Win32;
 using System;
 using System.Collections;
@@ -17,6 +18,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using Xceed.Wpf.AvalonDock.Layout;
+using DarkSunRE.ViewModels;
 
 namespace DarkSunRE
 {
@@ -25,11 +27,12 @@ namespace DarkSunRE
     /// </summary>
     public partial class MainWindow : Window
     {
-        ProjectModel Project = new ProjectModel();
+        Project Project = new Project();
 
         public MainWindow()
         {
-            InitializeComponent();
+            InitializeComponent();            
+            SetupInputBindings();
         }
 
         private void MenuItem_Click(object sender, RoutedEventArgs e)
@@ -37,12 +40,12 @@ namespace DarkSunRE
             var openFolderDialog = new OpenFolderDialog();
             if (openFolderDialog.ShowDialog() == true)
             {
-                Project = new ProjectModel(openFolderDialog.FolderName);
-                FileTree.Items.Clear();
-                foreach (var file in Project.Files)
-                {
-                    FileTree.Items.Add(file.Name);
-                }                
+                Project = new Project(openFolderDialog.FolderName);
+                //FileTree.Items.Clear();
+                //foreach (var file in Project.Files)
+                //{
+                //    FileTree.Items.Add(file.Name);
+                //}                
             }
         }
 
@@ -58,7 +61,7 @@ namespace DarkSunRE
 
             if (!Project.OpenedDocuments.Any(d => d.Name == name))
             {                
-                var Document = new GPLDocumentModel(path, name);
+                var Document = new GPLDocument(path, name);
                 LayoutDocument layoutDocument = new LayoutDocument();
                 layoutDocument.Title = Document.Name;
                 DataGrid dataGrid = new DataGrid();
@@ -148,8 +151,14 @@ namespace DarkSunRE
         }
         private void LoadJSONGPL_Click(object sender, RoutedEventArgs e)
         {
-            var doc = Project.OpenedDocuments.Single(d => d.Name == ((LayoutDocument)layoutDocumentPane.SelectedContent).Title);            
-            using (FileStream fs = new FileStream($"{doc.Path}.json", FileMode.Open))
+            var doc = Project.OpenedDocuments.Single(d => d.Name == ((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
+            var filename = $"{doc.Path}.json";
+            if (!File.Exists(filename))
+            {
+                MessageBox.Show($"Файл {filename} отсутствует");
+                return;
+            }
+            using (FileStream fs = new FileStream(filename, FileMode.Open))
             {
                 var decodedStrings = JsonSerializer.Deserialize<List<GPLString>>(fs);
                 if (decodedStrings != null)
@@ -162,7 +171,43 @@ namespace DarkSunRE
                 else
                 {
                     MessageBox.Show("Загрузка данных не удалась.");
+                    return;
                 }
+            }
+        }
+        private void SetupInputBindings()
+        {
+            // Глобальные горячие клавиши
+            InputBindings.Add(new KeyBinding(
+                ApplicationCommands.New,
+                new KeyGesture(Key.N, ModifierKeys.Control)));
+
+            InputBindings.Add(new KeyBinding(
+                ApplicationCommands.Open,
+                new KeyGesture(Key.O, ModifierKeys.Control)));
+        }
+
+        private void NewCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+        {
+            if (DataContext is MainViewModel vm && vm.NewProjectCommand.CanExecute(null))
+            {
+                vm.NewProjectCommand.Execute(null);
+            }
+        }
+
+        private void OpenCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+        {
+            if (DataContext is MainViewModel vm && vm.OpenProjectCommand.CanExecute(null))
+            {
+                vm.OpenProjectCommand.Execute(null);
+            }
+        }
+
+        private void SaveCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+        {
+            if (DataContext is MainViewModel vm && vm.SaveProjectCommand?.CanExecute(null) == true)
+            {
+                vm.SaveProjectCommand.Execute(null);
             }
         }
     }

@@ -9,11 +9,11 @@ using WpfHexaEditor.Core;
 
 namespace DarkSunRE.Models
 {
-    public class GPLDocumentModel
+    public class GPLDocument
     {
         public byte[] originalBytes;
         public byte[] newBytes;
-        public GPLDocumentModel(string path, string name)
+        public GPLDocument(string path, string name)
         {
             Name = name;
             Path = path;
@@ -22,7 +22,7 @@ namespace DarkSunRE.Models
             originalBytes.CopyTo(newBytes);
             decodedStrings = DecodeStrings(originalBytes);
         }
-        public GPLDocumentModel()
+        public GPLDocument()
         {
 
         }

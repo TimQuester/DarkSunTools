@@ -20,7 +20,7 @@ public class FontParser
     private const int WidthBytes = 2;
     private const int HeaderSize = 0x347;
 
-    public byte[] FontHeader { get; private set; }
+    public byte[]? FontHeader { get; private set; }
 
     public List<Glyph> ParseFontDump(byte[] data)
     {

@@ -8,7 +8,7 @@
         xmlns:avalondock="http://schemas.xceed.com/wpf/xaml/avalondock"        
         xmlns:views="clr-namespace:DarkSunRE.Views"
         mc:Ignorable="d"
-        Title="MainWindow" Width="1200" Height="1024">
+        Title="Dark Sun Tools" Width="1200" Height="1024">
     <Window.Resources>
         <DataTemplate x:Key="VerticalStringsTemplate">
             <StackPanel Orientation="Vertical">

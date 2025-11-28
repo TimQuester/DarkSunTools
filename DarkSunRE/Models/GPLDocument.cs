@@ -1,68 +1,74 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using WpfHexaEditor.Core;
+using DarkSunRE.Models;
 
 namespace DarkSunRE.Models
 {
+    /// <summary>
+    /// Lightweight GPL document used by the editor UI.
+    /// Decodes GPL resource bytes into a list of <see cref="GPLString"/>,
+    /// keeps original bytes, and produces new bytes after edits.
+    /// </summary>
     public class GPLDocument
     {
-        public byte[] originalBytes;
-        public byte[] newBytes;
-        public GPLDocument(string path, string name)
-        {
-            Name = name;
-            Path = path;
-            originalBytes = File.ReadAllBytes(path);
-            newBytes = new byte[originalBytes.Length];
-            originalBytes.CopyTo(newBytes);
-            decodedStrings = DecodeStrings(originalBytes);
-        }
-        public GPLDocument()
-        {
-
-        }
-        public string Name { get; set; }
+        public string Name { get; }
         public string Path { get; set; }
+        public byte[] originalBytes { get; }
+        public byte[] newBytes { get; private set; }
         public List<GPLString> decodedStrings { get; set; } = new List<GPLString>();
 
-        /// <summary>
-        /// Декодируем строки из непрерывного потоква 7 бит в 8 бит
-        /// </summary>
-        /// <param name="bytes">Поток с 7-битными символами</param>
-        /// <returns>Список строк</returns>
-        static List<GPLString> DecodeStrings(byte[] bytes)
+        public GPLDocument(byte[] resourceBytes, string name, string path = null)
         {
-            const int TextBufferSize = 3000;
-            int strNumber = 0;
-            List<GPLString> result = new List<GPLString>();
+            Name = name;
+            Path = path ?? name;
+            originalBytes = resourceBytes ?? Array.Empty<byte>();
+            newBytes = (byte[])originalBytes.Clone();
+
+            decodedStrings = DecodeToGPLStrings(originalBytes);
+        }
+
+        public void ApplyStringChanges()
+        {
+            newBytes = ApplyStringChangesToBytes(originalBytes, decodedStrings);
+        }
+
+        public void RefreshNewBytesAfterLoadJson()
+        {
+            ApplyStringChanges();
+        }
+
+        // --- Decoding / Encoding implementation (ported and adapted from TextTools) ---
+
+        private static List<GPLString> DecodeToGPLStrings(byte[] bytes)
+        {
+            var result = new List<GPLString>();
+            if (bytes == null || bytes.Length == 0) return result;
+
+            const int TextBufferSize = 4096;
             int position = 0;
-            byte[] textBuffer = new byte[TextBufferSize];
+            int stringIndex = 0;
 
             while (position < bytes.Length)
             {
                 if (bytes[position] == 0x05)
                 {
-                    position++;
-
-                    GPLString nGPLString = new GPLString();
-                    nGPLString.StartPosition = position;
-
+                    int markerIndex = position;
+                    position++; // move to content
+                    int contentStart = position;
+                    var textBuffer = new byte[TextBufferSize];
                     int strPos = 0;
                     int currentChar = 0;
                     int currentRShift = 1;
                     bool endOfString = false;
 
-                    int tempPosition = position;
                     while (position < bytes.Length && strPos < TextBufferSize - 1 && !endOfString)
                     {
                         if (currentRShift > 0)
                         {
-                            currentChar = (currentChar << 8) | bytes[tempPosition++];
+                            currentChar = (currentChar << 8) | bytes[position++];
                         }
 
                         int decodedChar = (currentChar >> currentRShift) & 0x7F;
@@ -71,17 +77,11 @@ namespace DarkSunRE.Models
                         if (textBuffer[strPos] == 0x03)
                         {
                             textBuffer[strPos] = 0;
-
-                            nGPLString.EndPosition = tempPosition - 1;
-                            nGPLString.OriginalBytes = textBuffer;
-                            nGPLString.OriginalString = Encoding.ASCII.GetString(textBuffer, 0, strPos);
-                            nGPLString.StringNumber = ++strNumber;
-                            result.Add(nGPLString);
                             endOfString = true;
                             break;
                         }
 
-                        // Все символы с кодом меньше 0x20, кроме управляющих, заменяем на пробелы
+                        // replace control characters with space where appropriate
                         if (textBuffer[strPos] < 0x20 &&
                             textBuffer[strPos] != '\t' &&
                             textBuffer[strPos] != '\n' &&
@@ -99,16 +99,22 @@ namespace DarkSunRE.Models
                         }
                     }
 
-                    if (!endOfString && strPos > 0)
-                    {
-                        textBuffer[strPos] = 0;
+                    int contentEndExclusive = position;
+                    var decoded = Encoding.ASCII.GetString(textBuffer, 0, strPos);
 
-                        nGPLString.EndPosition = tempPosition - 1;
-                        nGPLString.OriginalBytes = textBuffer;
-                        nGPLString.OriginalString = Encoding.ASCII.GetString(textBuffer, 0, strPos);
-                        nGPLString.StringNumber = ++strNumber;
-                        result.Add(nGPLString);
-                    }
+                    var gpl = new GPLString
+                    {
+                        StringNumber = stringIndex++,
+                        StartPosition = contentStart,
+                        EndPosition = Math.Max(contentStart, contentEndExclusive - 1),
+                        OriginalString = decoded,
+                        NewString = decoded,
+                        RealString = !string.IsNullOrWhiteSpace(decoded),
+                        OriginalBytes = ExtractRange(bytes, contentStart, contentEndExclusive - contentStart),
+                        NewBytes = ExtractRange(bytes, contentStart, contentEndExclusive - contentStart)
+                    };
+
+                    result.Add(gpl);
                 }
                 else
                 {
@@ -118,106 +124,126 @@ namespace DarkSunRE.Models
 
             return result;
         }
- 
-        public void ApplyStringChanges()
+
+        private static byte[] ExtractRange(byte[] bytes, int offset, int count)
         {
-            foreach (var str in decodedStrings)
+            if (bytes == null) return Array.Empty<byte>();
+            if (offset < 0) offset = 0;
+            if (count <= 0) return Array.Empty<byte>();
+            if (offset + count > bytes.Length) count = Math.Max(0, bytes.Length - offset);
+            var outb = new byte[count];
+            Array.Copy(bytes, offset, outb, 0, count);
+            return outb;
+        }
+
+        private static byte[] ApplyStringChangesToBytes(byte[] originalBytes, List<GPLString> strings)
+        {
+            if (originalBytes == null) return Array.Empty<byte>();
+            var newBytesList = new List<byte>(originalBytes);
+            int stringIndex = 0;
+            int position = 0;
+
+            while (position < newBytesList.Count && stringIndex < strings.Count)
             {
-
-                int originalBlockSize = str.EndPosition - str.StartPosition;
-
-                if (str.NewString != null && str.OriginalString != str.NewString)
+                if (newBytesList[position] == 0x05)
                 {
-                    byte[] newBlock =
-                        EncodeString(str.NewString, originalBlockSize);
-                    Array.Copy(newBlock, 0, newBytes, str.StartPosition, originalBlockSize);
+                    int markerPos = position;
+                    position++;
+                    int blockStart = position;
+
+                    int blockEnd = position;
+                    while (blockEnd < newBytesList.Count && newBytesList[blockEnd] != 0x05)
+                        blockEnd++;
+
+                    int originalBlockSize = blockEnd - blockStart;
+
+                    var gpl = strings[stringIndex];
+                    string originalString = gpl.OriginalString ?? string.Empty;
+                    string newString = gpl.NewString ?? string.Empty;
+
+                    if (!string.Equals(originalString, newString, StringComparison.Ordinal))
+                    {
+                        var encoded = EncodeStringWithFixedSize(newString, originalBlockSize);
+                        // replace block preserving marker
+                        newBytesList.RemoveRange(blockStart, originalBlockSize);
+                        newBytesList.InsertRange(blockStart, encoded);
+                        position = blockStart + encoded.Length;
+                    }
+                    else
+                    {
+                        position = blockEnd;
+                    }
+
+                    stringIndex++;
+                }
+                else
+                {
+                    position++;
                 }
             }
+
+            return newBytesList.ToArray();
         }
-        static byte[] EncodeString(string str, int size)
+
+        private static byte[] EncodeStringWithFixedSize(string str, int targetSize)
         {
-            using (MemoryStream outputStream = new MemoryStream())
+            int contentSize = Math.Max(0, targetSize - 1);
+            string adjustedStr = str.Length > contentSize
+                ? str.Substring(0, contentSize)
+                : str.PadRight(contentSize, ' ');
+
+            var encodedBytes = new List<byte>();
+            int bitBuffer = 0;
+            int bitsInBuffer = 0;
+
+            foreach (char c in adjustedStr)
             {
-        
-                    byte[] asciiBytes = Encoding.ASCII.GetBytes(str);
-                    int currentShift = 1;
-                    int buffer = 0;
-                    int bitsInBuffer = 0;
+                byte charByte = (byte)c;
+                if (charByte < 0x20 && charByte != 0) charByte = 0x20;
 
-                    foreach (byte b in asciiBytes)
-                    {
-                        // Добавляем 7 бит символа в буфер
-                        buffer = (buffer << 7) | (b & 0x7F);
-                        bitsInBuffer += 7;
+                bitBuffer |= (charByte & 0x7F) << bitsInBuffer;
+                bitsInBuffer += 7;
 
-                        // Когда в буфере достаточно бит, извлекаем байты
-                        while (bitsInBuffer >= 8)
-                        {
-                            int shiftAmount = bitsInBuffer - 8;
-                            byte outputByte = (byte)((buffer >> shiftAmount) & 0xFF);
-                            outputStream.WriteByte(outputByte);
-                    
-                            // Убираем обработанные биты
-                            buffer &= (1 << shiftAmount) - 1;
-                            bitsInBuffer -= 8;
-                        }
-
-                        currentShift++;
-                        if (currentShift > 7)
-                        {
-                            currentShift = 1;
-                        }
-                    }
-
-                    // Добавляем терминатор строки (0x03)
-                    buffer = (buffer << 7) | 0x03;
-                    bitsInBuffer += 7;
-
-                    // Обрабатываем оставшиеся биты
-                    while (bitsInBuffer > 0)
-                    {
-                        int shiftAmount = Math.Max(bitsInBuffer - 8, 0);
-                        byte outputByte = (byte)((buffer >> shiftAmount) & 0xFF);
-                        outputStream.WriteByte(outputByte);
-                
-                        if (bitsInBuffer < 8)
-                        {
-                            break;
-                        }
-                
-                        buffer &= (1 << shiftAmount) - 1;
-                        bitsInBuffer -= 8;
-                    }
-
-                    // Проверяем, совпадает ли размер с исходным
-                    int encodedLength = (int)outputStream.Length - ((int)outputStream.Position - str.Length);                    
-
-                    if (encodedLength != size)
-                    {
-                        // Если размер не совпадает, корректируем (может потребоваться дописать нули или обрезать)
-                        while (outputStream.Length < size)
-                        {
-                            outputStream.WriteByte(0); // Дополняем нулями (если не хватает)
-                        }
-                        if (outputStream.Length > size)
-                        {
-                            byte[] data = outputStream.ToArray();
-                            Array.Resize(ref data, size);
-                            outputStream.SetLength(0);
-                            outputStream.Write(data, 0, data.Length); // Обрезаем лишнее
-                        }
-                    }
-
-                return outputStream.ToArray();
+                while (bitsInBuffer >= 8)
+                {
+                    encodedBytes.Add((byte)(bitBuffer & 0xFF));
+                    bitBuffer >>= 8;
+                    bitsInBuffer -= 8;
+                }
             }
-        }
-        /// <summary>
-        /// Обновление данных в байтах при изменении новых строк
-        /// </summary>
-        public void RefreshNewBytesAfterLoadJson()
-        {
-            originalBytes.CopyTo(newBytes);
-            ApplyStringChanges();
+
+            // terminator 0x03
+            bitBuffer |= (0x03 & 0x7F) << bitsInBuffer;
+            bitsInBuffer += 7;
+            while (bitsInBuffer >= 8)
+            {
+                encodedBytes.Add((byte)(bitBuffer & 0xFF));
+                bitBuffer >>= 8;
+                bitsInBuffer -= 8;
+            }
+
+            if (bitsInBuffer > 0)
+            {
+                encodedBytes.Add((byte)(bitBuffer & 0xFF));
+            }
+
+            if (encodedBytes.Count > targetSize)
+            {
+                encodedBytes = encodedBytes.Take(targetSize).ToList();
+            }
+            else if (encodedBytes.Count < targetSize)
+            {
+                if (!encodedBytes.Contains(0x03))
+                {
+                    encodedBytes.Add(0x03);
+                }
+                while (encodedBytes.Count < targetSize)
+                {
+                    encodedBytes.Add(0);
+                }
+            }
+
+            return encodedBytes.ToArray();
         }
     }
 }

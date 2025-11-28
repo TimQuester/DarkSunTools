@@ -4,6 +4,7 @@ using Microsoft.Win32;
 using System;
 using System.Collections;
 using System.IO;
+using System.Linq;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Text;
@@ -19,6 +20,7 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using Xceed.Wpf.AvalonDock.Layout;
 using DarkSunRE.ViewModels;
+using DSunTools.Common.Gff;
 
 namespace DarkSunRE
 {
@@ -27,41 +29,46 @@ namespace DarkSunRE
     /// </summary>
     public partial class MainWindow : Window
     {
-        Project Project = new Project();
-
         public MainWindow()
         {
-            InitializeComponent();            
+            InitializeComponent();
             SetupInputBindings();
+
+            Loaded += MainWindow_Loaded;
         }
 
-        private void MenuItem_Click(object sender, RoutedEventArgs e)
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            var openFolderDialog = new OpenFolderDialog();
-            if (openFolderDialog.ShowDialog() == true)
+            if (DataContext is MainViewModel vm && vm.ProjectTree != null)
             {
-                Project = new Project(openFolderDialog.FolderName);
-                //FileTree.Items.Clear();
-                //foreach (var file in Project.Files)
-                //{
-                //    FileTree.Items.Add(file.Name);
-                //}                
+                vm.ProjectTree.ResourceOpened += ProjectTree_ResourceOpened;
             }
         }
 
-        private void TreeViewItem_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-        {            
-            string? name = ((TreeViewItem)sender).Header.ToString();
-            if (name == null)
+        private void ProjectTree_ResourceOpened(object? sender, ResourceEventArgs e)
+        {
+            // Only handle GPL-like resources (you can extend detection by resource type)
+            if (e?.Resource == null || e.Project == null) return;
+
+            // Find resource container file
+            var project = e.Project;
+            var resource = e.Resource;
+            var container = project.Files.FirstOrDefault(f => f.Resources?.Any(r => r.Tag == resource.Tag && r.Number == resource.Number) == true);
+            if (container == null)
             {
-                MessageBox.Show("Ошибка определения имени документа");
+                MessageBox.Show("Containing resource file not found.");
                 return;
             }
-            string path = $"{Project.Path}\\{name}";            
 
-            if (!Project.OpenedDocuments.Any(d => d.Name == name))
-            {                
-                var Document = new GPLDocument(path, name);
+            try
+            {
+                // Parse GFF and extract resource bytes
+                var gff = GffFile.Create(container.Data);
+                var resourceBytes = gff.GetResourceData(resource.Tag, resource.Number);
+
+                string docName = $"{container.Name}:{resource.Tag}-{resource.Number}";
+                var Document = new GPLDocument(resourceBytes, docName, container.FullPath);
+
                 LayoutDocument layoutDocument = new LayoutDocument();
                 layoutDocument.Title = Document.Name;
                 DataGrid dataGrid = new DataGrid();
@@ -76,10 +83,7 @@ namespace DarkSunRE
                 {
                     dataGrid.RowStyle = grayStyle;
                 }
-                else
-                {
-                    MessageBox.Show("Стиль не найден в ресурсах");
-                }
+
                 dataGrid.ItemsSource = Document.decodedStrings;
                 dataGrid.Columns.Add(new DataGridTextColumn() { Header = "#", Binding = new Binding(nameof(GPLString.StringNumber)) });
                 dataGrid.Columns.Add(new DataGridTextColumn() { Header = "Start", Binding = new Binding(nameof(GPLString.StartPosition)) });
@@ -93,13 +97,30 @@ namespace DarkSunRE
                 dataGrid.Columns.Add(new DataGridCheckBoxColumn() { Header = "Real", Binding = new Binding(nameof(GPLString.RealString)) });
 
                 dataGrid.SelectedCellsChanged += DataGrid_SelectedCellsChanged;
-                
+
+                // load into hex view
                 hvp.LoadBytes(Document.originalBytes, Document.newBytes);
+
                 layoutDocument.Content = dataGrid;
                 layoutDocumentPane.Children.Add(layoutDocument);
                 layoutDocument.IsActive = true;
 
-                Project.OpenedDocuments.Add(Document);
+                // Add opened document to project list for later save/export operations
+                project.OpenedDocuments.Add(Document);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to open resource: {ex.Message}");
+            }
+        }
+
+        private void MenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            var openFolderDialog = new OpenFolderDialog();
+            if (openFolderDialog.ShowDialog() == true)
+            {
+                // legacy behaviour - not used for project model
+                // Project = new Project(openFolderDialog.FolderName);
             }
         }
 
@@ -116,7 +137,7 @@ namespace DarkSunRE
         {
             if (layoutDocumentPane.SelectedContent != null)
             {
-                var doc = Project.OpenedDocuments.Single(d => d.Name == ((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
+                var doc = FindOpenedDocumentByLayoutTitle(((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
                 if (doc != null)
                 {
                     doc.ApplyStringChanges();
@@ -129,11 +150,10 @@ namespace DarkSunRE
         {
             if (layoutDocumentPane.SelectedContent != null)
             {
-                var doc = Project.OpenedDocuments.Single(d => d.Name == ((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
+                var doc = FindOpenedDocumentByLayoutTitle(((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
                 if (doc != null)
                 {
                     string newFilePath = $"{doc.Path}_modified";
-
                     File.WriteAllBytes(newFilePath, doc.newBytes);
                 }
             }
@@ -141,7 +161,9 @@ namespace DarkSunRE
 
         private void SaveJSONGPL_Click(object sender, RoutedEventArgs e)
         {
-            var doc = Project.OpenedDocuments.Single(d => d.Name == ((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
+            var doc = FindOpenedDocumentByLayoutTitle(((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
+            if (doc == null) return;
+
             using (FileStream fs = new FileStream($"{doc.Path}.json", FileMode.Create))
             {
                 JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions()
@@ -149,9 +171,12 @@ namespace DarkSunRE
                 JsonSerializer.Serialize<List<GPLString>>(fs, doc.decodedStrings, jsonSerializerOptions);
             }
         }
+
         private void LoadJSONGPL_Click(object sender, RoutedEventArgs e)
         {
-            var doc = Project.OpenedDocuments.Single(d => d.Name == ((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
+            var doc = FindOpenedDocumentByLayoutTitle(((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
+            if (doc == null) return;
+
             var filename = $"{doc.Path}.json";
             if (!File.Exists(filename))
             {
@@ -175,6 +200,18 @@ namespace DarkSunRE
                 }
             }
         }
+
+        private GPLDocument FindOpenedDocumentByLayoutTitle(string title)
+        {
+            // assume main VM is DataContext and has CurrentProject
+            if (DataContext is MainViewModel vm && vm.CurrentProject != null)
+            {
+                return vm.CurrentProject.OpenedDocuments.FirstOrDefault(d => d.Name == title);
+            }
+            return null;
+        }
+
+        // existing input bindings and command handlers unchanged...
         private void SetupInputBindings()
         {
             // Глобальные горячие клавиши

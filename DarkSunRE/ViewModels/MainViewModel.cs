@@ -6,6 +6,9 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using System.IO;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace DarkSunRE.ViewModels
 {
@@ -17,6 +20,7 @@ namespace DarkSunRE.ViewModels
         private readonly IFileService _fileService;      
 
         private Project _currentProject;
+        private CancellationTokenSource _operationCts;
 
         public bool IsBusy { get; private set; }
         public ProjectTreeViewModel ProjectTree { get; }
@@ -26,6 +30,7 @@ namespace DarkSunRE.ViewModels
         public ICommand OpenProjectCommand { get; }
         public ICommand SaveProjectCommand { get; }
         public ICommand ExitCommand { get; }
+        public ICommand CancelOperationCommand { get; }
 
         public bool IsModified;
 
@@ -41,21 +46,46 @@ namespace DarkSunRE.ViewModels
             _projectService.ProjectChanged += OnProjectChanged;
             _projectService.ResourceChanged += OnResourceChanged;
             _projectService.GffFileChanged += OnGffFileChanged;
-            //_statusService.StatusChanged += OnStatusChanged;
 
             ProjectTree.ResourceOpened += OnResourceOpened;
 
-
             NewProjectCommand = new RelayCommand(ExecuteNewProject, CanExecuteNewProject);
-            OpenProjectCommand = new RelayCommand(ExecuteOpenProject);
-            SaveProjectCommand = new RelayCommand(ExecuteSave, CanExecuteSave);
+            OpenProjectCommand = new AsyncRelayCommand(OpenProjectAsync, () => !IsBusy);
+            SaveProjectCommand = new AsyncRelayCommand(SaveProjectAsync, () => CurrentProject != null && IsModified);
+            CancelOperationCommand = new RelayCommand(CancelOperation, () => IsBusy);
             ExitCommand = new RelayCommand(ExecuteExit);
         }
 
+        // Implemented to handle events coming from services (ResourceChanged)
         private void OnResourceChanged(object? sender, Services.ResourceEventArgs e)
         {
-            throw new NotImplementedException();
-        }        
+            // Update UI/state in response to service-level resource events
+            if (e == null) return;
+
+            // If the event concerns the currently opened project, refresh tree or update nodes
+            if (e.Project != null && e.Project == CurrentProject)
+            {
+                // Reassign CurrentProject to trigger ProjectTree load, or call RefreshCommand
+                ProjectTree.CurrentProject = e.Project;
+            }
+
+            // Show short info in status bar depending on action
+            switch (e.Action)
+            {
+                case ProjectAction.ResourceReplaced:
+                    _statusService?.ShowMessage($"Resource {e.GffFileName}:{e.Resource?.Tag}-{e.Resource?.Number} replaced", StatusMessageType.Info);
+                    break;
+                case ProjectAction.ResourceModified:
+                    _statusService?.ShowMessage("Resource modified", StatusMessageType.Info);
+                    break;
+                case ProjectAction.ResourceOpened:
+                    _statusService?.ShowMessage("Resource opened", StatusMessageType.Info);
+                    break;
+                default:
+                    _statusService?.ShowMessage("Project resources updated", StatusMessageType.Info);
+                    break;
+            }
+        }
 
         public Project CurrentProject
         {
@@ -94,15 +124,6 @@ namespace DarkSunRE.ViewModels
                     break;
             }
         }
-        private void OnResourceChanged(object sender, ResourceEventArgs e)
-        {
-            // Обновление UI при изменении ресурсов
-            if (e.Action == ProjectAction.ResourceModified)
-            {
-                // Обновить дерево проекта
-                // Показать уведомление и т.д.
-            }
-        }
 
         private void OnGffFileChanged(object sender, GffFileEventArgs e)
         {
@@ -131,36 +152,6 @@ namespace DarkSunRE.ViewModels
             return true;
         }
 
-        //private void AddToRecentProjects(Project project)
-        //{
-        //    var recentProject = new RecentProject
-        //    {
-        //        Name = project.ProjectName,
-        //        Path = project.ProjectFilePath,
-        //        GameType = project.GameType,
-        //        LastAccessed = DateTime.Now
-        //    };
-
-        //    RecentProjects.Insert(0, recentProject);
-
-        //    // Сохраняем в настройках
-        //    SaveRecentProjects();
-        //}
-
-        //private void LoadRecentProjects()
-        //{
-        //    // Загрузка из настроек/файла
-        //    var recent = _settingsService.GetRecentProjects();
-        //    foreach (var project in recent)
-        //    {
-        //        RecentProjects.Add(project);
-        //    }
-        //}
-
-        //private void SaveRecentProjects()
-        //{
-        //    _settingsService.SaveRecentProjects(RecentProjects.ToList());
-        //}
         public ObservableCollection<DocumentViewModel> Documents { get; set; }        
         public CommandManager CommandManager { get; set; }
 
@@ -187,29 +178,98 @@ namespace DarkSunRE.ViewModels
         }
         private bool CanExecuteNewProject() => !IsBusy;
 
-        private void ExecuteOpenProject()
+        private async Task OpenProjectAsync()
         {
             var filePath = _dialogService.ShowOpenFileDialog("Project files|*.dsproj");
             if (string.IsNullOrEmpty(filePath))
                 return;
 
-            var project = _projectService.LoadProject(filePath);
-            if (project == null)
+            _operationCts?.Cancel();
+            _operationCts = new CancellationTokenSource();
+
+            try
             {
-                _statusService.ShowError($"Failed to open project: {Path.GetFileName(filePath)}");
-                return;
+                IsBusy = true;
+                OnPropertyChanged(nameof(IsBusy));
+                _statusService.ShowProgress("Opening project...", 0, true);
+
+                var progress = new Progress<StatusMessage>(s =>
+                {
+                    _statusService.ShowProgress(s.Message, s.Progress ?? 0, s.IsIndeterminate);
+                });
+
+                // await without ConfigureAwait(false) so continuation runs on UI thread
+                var project = await _projectService.LoadProjectAsync(filePath, progress, _operationCts.Token);
+
+                if (project == null)
+                {
+                    _statusService.ShowError($"Failed to open project: {Path.GetFileName(filePath)}");
+                    return;
+                }
+
+                // Update bound properties on UI thread
+                CurrentProject = project;
+                IsModified = false;
+                OnPropertyChanged(nameof(IsModified));
+                _statusService.ShowSuccess($"Project '{project.ProjectName ?? Path.GetFileNameWithoutExtension(filePath)}' opened.");
             }
-
-            CurrentProject = project;
-            _statusService.ShowSuccess($"Project '{project.ProjectName ?? Path.GetFileNameWithoutExtension(filePath)}' opened.");
+            catch (OperationCanceledException)
+            {
+                _statusService.ShowMessage("Open cancelled");
+            }
+            catch (Exception ex)
+            {
+                _statusService.ShowError($"Failed to open project: {ex.Message}", ex);
+            }
+            finally
+            {
+                IsBusy = false;
+                OnPropertyChanged(nameof(IsBusy));
+                _statusService.Clear();
+                _operationCts = null;
+            }
         }
 
-        private void ExecuteSave()
+        private async Task SaveProjectAsync()
         {
-            // Логика сохранения
+            if (CurrentProject == null)
+                return;
+
+            _operationCts?.Cancel();
+            _operationCts = new CancellationTokenSource();
+
+            try
+            {
+                IsBusy = true;
+                OnPropertyChanged(nameof(IsBusy));
+
+                // await without ConfigureAwait(false) so continuation runs on UI thread
+                await _projectService.SaveProjectAsync(CurrentProject);
+
+                _statusService.ShowSuccess($"Project '{CurrentProject.ProjectName}' saved.");
+                IsModified = false;
+                OnPropertyChanged(nameof(IsModified));
+            }
+            catch (OperationCanceledException)
+            {
+                _statusService.ShowMessage("Save cancelled");
+            }
+            catch (Exception ex)
+            {
+                _statusService.ShowError($"Failed to save project: {ex.Message}", ex);
+            }
+            finally
+            {
+                IsBusy = false;
+                OnPropertyChanged(nameof(IsBusy));
+                _operationCts = null;
+            }
         }
 
-        private bool CanExecuteSave() => CurrentProject != null && IsModified;
+        private void CancelOperation()
+        {
+            _operationCts?.Cancel();
+        }
 
         private void ExecuteExit()
         {
@@ -223,11 +283,11 @@ namespace DarkSunRE.ViewModels
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }       
+        }      
 
         public void ReplaceResource(Project project, string gffFileName, ResourceInfo resource, byte[] newData)
         {            
-            var reArgs = new ResourceEventArgs(ProjectAction.ResourceReplaced, project, resource, gffFileName);            
+            var reArgs = new Services.ResourceEventArgs(ProjectAction.ResourceReplaced, project, resource, gffFileName);            
             OnResourceChanged(this, reArgs);
             var pjArgs = new ProjectEventArgs(ProjectAction.Modified, project);
             OnProjectChanged(this, pjArgs);

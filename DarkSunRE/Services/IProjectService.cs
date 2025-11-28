@@ -24,5 +24,6 @@ namespace DarkSunRE.Services
         void ReplaceResource(Project project, string gffFileName, ResourceInfo resource, byte[] newData);
         Task<Project> CreateNewProjectAsync(object originalGamePath, object modifiedGamePath, object gitRepositoryPath, object type);
         Task SaveProjectAsync(Project project);
+        public Task<Project> LoadProjectAsync(string projectFilePath, IProgress<StatusMessage> progress = null, CancellationToken cancellationToken = default);
     }
 }

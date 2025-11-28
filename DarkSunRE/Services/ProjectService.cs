@@ -4,8 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace DarkSunRE.Services
@@ -36,7 +36,25 @@ namespace DarkSunRE.Services
             ProjectChanged?.Invoke(this, new ProjectEventArgs(action, project));
         }
 
+        // Synchronous compatibility wrapper - delegates to async implementation
         public Project CreateNewProject(string originalPath, string modifiedPath, string gitPath, ProjectType gameType)
+        {
+            return CreateNewProjectAsync(originalPath, modifiedPath, gitPath, gameType, CancellationToken.None).GetAwaiter().GetResult();
+        }
+
+        // Async implementation of project creation (copies files and loads resources)
+        public async Task<Project> CreateNewProjectAsync(object originalGamePathObj, object modifiedGamePathObj, object gitRepositoryPathObj, object type)
+        {
+            // Interface uses object parameters; coerce to expected types
+            var originalPath = originalGamePathObj as string ?? throw new ArgumentException("originalGamePath must be a string", nameof(originalGamePathObj));
+            var modifiedPath = modifiedGamePathObj as string ?? throw new ArgumentException("modifiedGamePath must be a string", nameof(modifiedGamePathObj));
+            var gitPath = gitRepositoryPathObj as string;
+            var gameType = type is ProjectType pt ? pt : throw new ArgumentException("type must be ProjectType", nameof(type));
+
+            return await CreateNewProjectAsync(originalPath, modifiedPath, gitPath, gameType, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        public async Task<Project> CreateNewProjectAsync(string originalPath, string modifiedPath, string gitPath, ProjectType gameType, CancellationToken cancellationToken)
         {
             if (!_fileService.IsValidGamePath(originalPath, gameType))
                 throw new InvalidOperationException("Invalid game path");
@@ -48,15 +66,19 @@ namespace DarkSunRE.Services
                 _fileService.CreateDirectory(gitPath);
 
             var expectedFiles = _fileService.GetExpectedGameFiles(gameType);
+
+            // Copy files asynchronously
             foreach (var file in expectedFiles)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 var sourcePath = _fileService.CombinePaths(originalPath, file);
                 var destPath = _fileService.CombinePaths(modifiedPath, file);
 
                 if (_fileService.FileExists(sourcePath))
                 {
-                    var data = _fileService.ReadAllBytes(sourcePath);
-                    _fileService.WriteAllBytes(destPath, data);
+                    var data = await _fileService.ReadAllBytesAsync(sourcePath, cancellationToken).ConfigureAwait(false);
+                    await _fileService.WriteAllBytesAsync(destPath, data, cancellationToken).ConfigureAwait(false);
                 }
             }
 
@@ -68,21 +90,33 @@ namespace DarkSunRE.Services
                 ProjectType = gameType,
             };
 
-            project.Files = LoadResourceFiles(project.ProjectType, project.OriginalGamePath);
+            // Load resource files asynchronously (CPU-bound parsing pushed to thread pool)
+            project.Files = await LoadResourceFilesAsync(project.ProjectType, project.OriginalGamePath, null, cancellationToken).ConfigureAwait(false);
 
+            OnProjectChanged(ProjectAction.Created, project);
             return project;
         }
 
         private List<ResourceFile> LoadResourceFiles(ProjectType projectType, string originalGamePath)
         {
+            // keep sync wrapper for compatibility
+            return LoadResourceFilesAsync(projectType, originalGamePath, null, CancellationToken.None).GetAwaiter().GetResult();
+        }
+
+        // Async loader with progress and cancellation
+        public async Task<List<ResourceFile>> LoadResourceFilesAsync(ProjectType projectType, string originalGamePath, IProgress<StatusMessage> progress = null, CancellationToken cancellationToken = default)
+        {
             switch (projectType)
             {
-                case ProjectType.DarkSunShatteredLands: return LoadDSSLFiles(originalGamePath);
-                default: return new List<ResourceFile>();
+                case ProjectType.DarkSunShatteredLands:
+                    return await LoadDSSLFilesAsync(originalGamePath, progress, cancellationToken).ConfigureAwait(false);
+                default:
+                    return new List<ResourceFile>();
             }
         }
 
-        private List<ResourceFile> LoadDSSLFiles(string originalGamePath)
+        // Async GFF loader
+        public async Task<List<ResourceFile>> LoadDSSLFilesAsync(string originalGamePath, IProgress<StatusMessage> progress = null, CancellationToken cancellationToken = default)
         {
             var resourceList = new List<ResourceFile>();
 
@@ -90,43 +124,108 @@ namespace DarkSunRE.Services
                 return resourceList;
 
             var files = _fileService.GetFiles(originalGamePath, "*.gff", SearchOption.TopDirectoryOnly);
+            int total = files.Length;
+            int processed = 0;
 
             foreach (var filePath in files)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                processed++;
+                var fileName = Path.GetFileName(filePath);
+
+                progress?.Report(new StatusMessage
+                {
+                    Message = $"Loading {fileName}",
+                    Type = StatusMessageType.Progress,
+                    Progress = (double)(processed - 1) / Math.Max(1, total),
+                    IsIndeterminate = false,
+                    Timestamp = DateTime.Now
+                });
+
                 try
                 {
+                    var bytes = await _fileService.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
+
+                    if (bytes == null || bytes.Length < 16)
+                    {
+                        _statusService?.ShowWarning($"Skipping {fileName}: file too small.");
+                        continue;
+                    }
+
+                    // quick sanity-check of index pointer at offset 12
+                    bool indexOk;
+                    try
+                    {
+                        int indexStart = BitConverter.ToInt32(bytes, 12);
+                        indexOk = indexStart >= 0 && indexStart < bytes.Length;
+                    }
+                    catch
+                    {
+                        indexOk = false;
+                    }
+
+                    if (!indexOk)
+                    {
+                        var headerHex = BitConverter.ToString(bytes.Take(Math.Min(32, bytes.Length)).ToArray());
+                        _statusService?.ShowWarning($"Skipping {fileName}: invalid index start. Size={bytes.Length}. Header={headerHex}");
+                        continue;
+                    }
+
+                    // Parse GFF on threadpool (CPU-bound)
+                    GffFile gffFile;
+                    try
+                    {
+                        gffFile = await Task.Run(() => GffFile.Create(bytes), cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        var headerHex = BitConverter.ToString(bytes.Take(Math.Min(64, bytes.Length)).ToArray());
+                        _statusService?.ShowWarning($"Failed to parse GFF '{fileName}': {ex.GetType().Name}: {ex.Message}. Size={bytes.Length}. Header={headerHex}");
+                        continue;
+                    }
+
                     var resourceFile = new ResourceFile
                     {
-                        Name = Path.GetFileName(filePath),
+                        Name = fileName,
                         FullPath = filePath,
-                        Data = _fileService.ReadAllBytes(filePath),
-                        IsModified = false
+                        Data = bytes,
+                        IsModified = false,
+                        Resources = ExtractResources(gffFile)
                     };
 
-                    // парсинг GFF (синхронно, как раньше)
-                    GffFile gffFile = GffFile.Create(resourceFile.Data);
-                    resourceFile.Resources = ExtractResources(gffFile);
                     resourceList.Add(resourceFile);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
-                    // не останавливаем загрузку — логируем и продолжаем
                     _statusService?.ShowWarning($"Ошибка при загрузке GFF: {filePath} - {ex.Message}");
                     continue;
                 }
             }
 
+            progress?.Report(new StatusMessage
+            {
+                Message = $"Loaded {resourceList.Count} resource files",
+                Type = StatusMessageType.Success,
+                Progress = 1.0,
+                IsIndeterminate = false,
+                Timestamp = DateTime.Now
+            });
+
             return resourceList;
         }
 
-        public Project CreateNewProject(string originalPath, string modifiedPath, string gitPath)
+        // Synchronous LoadProject wrapper delegates to async
+        public Project LoadProject(string projectFilePath)
         {
-            var project = new Project();
-            OnProjectChanged(ProjectAction.Created, project);
-            return project;
+            return LoadProjectAsync(projectFilePath, null, CancellationToken.None).GetAwaiter().GetResult();
         }
 
-        public Project LoadProject(string projectFilePath)
+        // Async load project with progress and cancellation
+        public async Task<Project> LoadProjectAsync(string projectFilePath, IProgress<StatusMessage> progress = null, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(projectFilePath))
                 throw new ArgumentNullException(nameof(projectFilePath));
@@ -139,11 +238,10 @@ namespace DarkSunRE.Services
 
             try
             {
-                var json = _fileService.ReadAllText(projectFilePath);
-                var dto = JsonSerializer.Deserialize<ProjectFileDto>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
+                progress?.Report(new StatusMessage { Message = "Reading project file...", Type = StatusMessageType.Progress, IsIndeterminate = true, Timestamp = DateTime.Now });
+
+                var json = await _fileService.ReadAllTextAsync(projectFilePath, null, cancellationToken).ConfigureAwait(false);
+                var dto = JsonSerializer.Deserialize<ProjectFileDto>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
                 if (dto == null)
                 {
@@ -163,11 +261,17 @@ namespace DarkSunRE.Services
                     ProjectType = dto.GameType
                 };
 
-                // синхронная загрузка файлов (как раньше)
-                project.Files = LoadResourceFiles(project.ProjectType, project.OriginalGamePath ?? project.ModifiedGamePath);
+                progress?.Report(new StatusMessage { Message = "Loading resource files...", Type = StatusMessageType.Progress, IsIndeterminate = false, Progress = 0, Timestamp = DateTime.Now });
+
+                project.Files = await LoadResourceFilesAsync(project.ProjectType, project.OriginalGamePath ?? project.ModifiedGamePath, progress, cancellationToken).ConfigureAwait(false);
 
                 OnProjectChanged(ProjectAction.Opened, project);
                 return project;
+            }
+            catch (OperationCanceledException)
+            {
+                _statusService?.ShowMessage("Project load cancelled");
+                throw;
             }
             catch (Exception ex)
             {
@@ -176,9 +280,62 @@ namespace DarkSunRE.Services
             }
         }
 
+        // Synchronous SaveProject wrapper
         public void SaveProject(Project project)
         {
-            OnProjectChanged(ProjectAction.Saved, project);
+            SaveProjectAsync(project, CancellationToken.None).GetAwaiter().GetResult();
+        }
+
+        // Async save project
+        public async Task SaveProjectAsync(Project project, CancellationToken cancellationToken = default)
+        {
+            if (project == null) throw new ArgumentNullException(nameof(project));
+            if (string.IsNullOrWhiteSpace(project.ModifiedGamePath) || string.IsNullOrWhiteSpace(project.ProjectName))
+            {
+                _statusService?.ShowError("Project must have a name and a modified game path to be saved.");
+                return;
+            }
+
+            try
+            {
+                _statusService?.ShowProgress("Saving project...", 0, true);
+
+                var dto = new ProjectFileDto
+                {
+                    ProjectName = project.ProjectName,
+                    OriginalGamePath = project.OriginalGamePath,
+                    ModifiedGamePath = project.ModifiedGamePath,
+                    GitRepositoryPath = project.GitRepositoryPath,
+                    GameType = project.ProjectType,
+                    CreatedDate = project.Created,
+                    LastModifiedDate = DateTime.Now
+                };
+
+                if (!_fileService.DirectoryExists(project.ModifiedGamePath))
+                    _fileService.CreateDirectory(project.ModifiedGamePath);
+
+                var projectFilePath = Path.Combine(project.ModifiedGamePath, $"{MakeValidFileName(project.ProjectName)}.dsproj");
+                var json = JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true });
+
+                await _fileService.WriteAllTextAsync(projectFilePath, json, null, cancellationToken).ConfigureAwait(false);
+
+                project.LastModified = DateTime.Now;
+                OnProjectChanged(ProjectAction.Saved, project);
+                _statusService?.ShowSuccess($"Project saved: {projectFilePath}");
+            }
+            catch (OperationCanceledException)
+            {
+                _statusService?.ShowMessage("Save cancelled");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _statusService?.ShowError($"Failed to save project: {ex.Message}", ex);
+            }
+            finally
+            {
+                _statusService?.Clear();
+            }
         }
 
         public void ScanGameResources(Project project)
@@ -202,26 +359,9 @@ namespace DarkSunRE.Services
             GffFileChanged?.Invoke(this, new GffFileEventArgs(action, project, gffFile, modifiedResources));
         }
 
-        public void ScanGameResourcesAsync(Project project)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<Project> CreateNewProjectAsync(object originalGamePath, object modifiedGamePath, object gitRepositoryPath, object type)
-        {
-            throw new NotImplementedException();
-        }
-
-        Task IProjectService.ScanGameResourcesAsync(Project project)
-        {
-            throw new NotImplementedException();
-        }
-
         public Task SaveProjectAsync(Project project)
         {
-            // backward compatibility - call sync SaveProject
-            SaveProject(project);
-            return Task.CompletedTask;
+            return SaveProjectAsync(project, CancellationToken.None);
         }
 
         public List<ResourceInfo> ExtractResources(GffFile gffFile)
@@ -252,6 +392,11 @@ namespace DarkSunRE.Services
         {
             var invalidChars = Path.GetInvalidFileNameChars();
             return new string(name.Where(ch => !invalidChars.Contains(ch)).ToArray());
+        }
+
+        public Task ScanGameResourcesAsync(Project project)
+        {
+            throw new NotImplementedException();
         }
 
         private class ProjectFileDto

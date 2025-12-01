@@ -7,13 +7,13 @@ using System.Threading.Tasks;
 
 namespace DarkSunRE.ViewModels
 {
-    public class ProjectCreatedEventArgs : EventArgs
-    {
-        public ProjectCreationData ProjectData { get; }
+    //public class ProjectCreatedEventArgs : EventArgs
+    //{
+    //    public ProjectCreationData ProjectData { get; }
 
-        public ProjectCreatedEventArgs(ProjectCreationData projectData)
-        {
-            ProjectData = projectData;
-        }
-    }
+    //    public ProjectCreatedEventArgs(ProjectCreationData projectData)
+    //    {
+    //        ProjectData = projectData;
+    //    }
+    //}
 }

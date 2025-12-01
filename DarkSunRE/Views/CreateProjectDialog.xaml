@@ -9,8 +9,8 @@
         Title="New project" Height="500" Width="600"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        d:DataContext="{d:DesignInstance viewModels:CreateProjectViewModel}"
-        >
+        d:DataContext="{d:DesignInstance viewModels:CreateProjectViewModel}">
+
     <Window.Resources>
         <Style TargetType="Button">
             <Setter Property="Margin" Value="5"/>
@@ -23,8 +23,10 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
     </Window.Resources>
+
     <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -71,11 +73,19 @@
                     Margin="5"/>
         </Grid>
 
-        <!-- Git Repository -->
-        <CheckBox Grid.Row="8" Content="Initialize Git Repository" 
-                  IsChecked="{Binding CreateGitRepository}" Margin="5,10"/>
+        <!-- JSON Folder Path (replaces Git) -->
+        <TextBlock Text="JSON Folder Path:" Grid.Row="8" FontWeight="Bold" Margin="0,10,0,0"/>
+        <Grid Grid.Row="9">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox Text="{Binding JsonFolderPath}" IsReadOnly="True" Margin="5"/>
+            <Button Grid.Column="1" Content="Browse..." Command="{Binding BrowseJsonFolderCommand}"
+                    Margin="5"/>
+        </Grid>
 
-        <StackPanel Grid.Row="9" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20">
+        <StackPanel Grid.Row="10" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20">
             <Button Content="Create" Command="{Binding CreateCommand}" 
                     IsDefault="True" Style="{StaticResource AccentButtonStyle}"/>
             <Button Content="Cancel" Command="{Binding CancelCommand}" 

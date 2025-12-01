@@ -31,6 +31,7 @@ namespace DarkSunRE.ViewModels
         public ICommand SaveProjectCommand { get; }
         public ICommand ExitCommand { get; }
         public ICommand CancelOperationCommand { get; }
+        public ICommand OpenSettingsCommand { get; }
 
         public bool IsModified;
 
@@ -54,6 +55,7 @@ namespace DarkSunRE.ViewModels
             SaveProjectCommand = new AsyncRelayCommand(SaveProjectAsync, () => CurrentProject != null && IsModified);
             CancelOperationCommand = new RelayCommand(CancelOperation, () => IsBusy);
             ExitCommand = new RelayCommand(ExecuteExit);
+            OpenSettingsCommand = new RelayCommand(OpenSettings);
         }
 
         // Implemented to handle events coming from services (ResourceChanged)
@@ -174,7 +176,7 @@ namespace DarkSunRE.ViewModels
                 var project = _projectService.CreateNewProject(
                     e.ProjectData.OriginalGamePath,
                     e.ProjectData.ModifiedGamePath,
-                    e.ProjectData.GitRepositoryPath,
+                    e.ProjectData.JsonFolderPath, // <-- передаём JSON folder вместо старого gitPath
                     e.ProjectData.GameType);
 
                 CurrentProject = project;
@@ -298,6 +300,35 @@ namespace DarkSunRE.ViewModels
             OnResourceChanged(this, reArgs);
             var pjArgs = new ProjectEventArgs(ProjectAction.Modified, project);
             OnProjectChanged(this, pjArgs);
+        }
+
+        private void OpenSettings()
+        {
+            var vm = _dialogService.CreateViewModel<ProjectSettingsViewModel>();
+            vm.InitializeFromProject(CurrentProject);
+            var result = _dialogService.ShowDialog(vm);
+            if (result == true)
+            {
+                // vm returned data via OnOk payload
+                if (vm.DialogResult == true)
+                {
+                    // payload was passed to RequestClose in BaseDialogViewModel; try to read via reflection-like pattern:
+                    // We used OnOk(new { Original = ..., Modified = ..., Json = ... })
+                    // But RequestClose sends DialogResultEventArgs with resultData; DialogService set window.DialogResult = e.Result
+                    // To access result data we should extend BaseDialogViewModel or keep a simple contract: after dialog closes, read vm properties
+                    // We'll just copy properties set in VM back to project if present
+                    if (CurrentProject != null)
+                    {
+                        CurrentProject.OriginalGamePath = vm.OriginalGamePath;
+                        CurrentProject.ModifiedGamePath = vm.ModifiedGamePath;
+                        // map JsonFolderPath -> project's Json storage field (we used GitRepositoryPath historically)
+                        CurrentProject.GitRepositoryPath = vm.JsonFolderPath;
+                        _statusService.SetProjectPath(CurrentProject.ModifiedGamePath ?? CurrentProject.OriginalGamePath);
+                        // Optionally save project metadata
+                        _projectService.SaveProject(CurrentProject);
+                    }
+                }
+            }
         }
     }
 }

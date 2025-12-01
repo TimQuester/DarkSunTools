@@ -90,6 +90,7 @@ namespace DarkSunRE
             var dialogService = serviceProvider.GetRequiredService<IDialogService>();
 
             dialogService.RegisterDialog<CreateProjectViewModel, CreateProjectDialog>();
+            dialogService.RegisterDialog<ProjectSettingsViewModel, ProjectSettingsView>();
             // other dialog registrations...
         }
 

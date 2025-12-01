@@ -6,8 +6,6 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Threading.Tasks;
-using System.Windows;
 using System.Windows.Input;
 
 namespace DarkSunRE.ViewModels
@@ -23,12 +21,9 @@ namespace DarkSunRE.ViewModels
         private string _projectName;
         private string _originalGamePath;
         private string _modifiedGamePath;
-        private string _gitRepositoryPath;
-        private bool _createGitRepository;
-        private bool _isValidGamePath;
+        private string _jsonFolderPath;
 
         public event EventHandler<ProjectCreatedEventArgs> ProjectCreated;
-
 
         public CreateProjectViewModel(
             IGameDefinitionService gameDefinitionService,
@@ -45,12 +40,12 @@ namespace DarkSunRE.ViewModels
             AvailableGames = _gameDefinitionService.GetSupportedGames();
             SelectedGame = AvailableGames.FirstOrDefault();
 
-            CreateCommand = new RelayCommand(CreateProject, CanCreateProject);
+            CreateCommand = new RelayCommand(CreateProject);
             CancelCommand = new RelayCommand(Cancel);
 
             BrowseOriginalGameCommand = new RelayCommand(BrowseOriginalGame);
             BrowseModifiedGameCommand = new RelayCommand(BrowseModifiedGame);
-            BrowseGitRepositoryCommand = new RelayCommand(BrowseGitRepository);
+            BrowseJsonFolderCommand = new RelayCommand(BrowseJsonFolder);
 
             ProjectName = "New project";
             UpdateModifiedGamePath();
@@ -102,24 +97,13 @@ namespace DarkSunRE.ViewModels
             }
         }
 
-        public string GitRepositoryPath
+        public string JsonFolderPath
         {
-            get => _gitRepositoryPath;
+            get => _jsonFolderPath;
             set
             {
-                _gitRepositoryPath = value;
+                _jsonFolderPath = value;
                 OnPropertyChanged();
-            }
-        }
-
-        public bool CreateGitRepository
-        {
-            get => _createGitRepository;
-            set
-            {
-                _createGitRepository = value;
-                OnPropertyChanged();
-                GitRepositoryPath = value ? ModifiedGamePath : null;
             }
         }
 
@@ -127,7 +111,7 @@ namespace DarkSunRE.ViewModels
         public ICommand CancelCommand { get; }
         public ICommand BrowseOriginalGameCommand { get; }
         public ICommand BrowseModifiedGameCommand { get; }
-        public ICommand BrowseGitRepositoryCommand { get; }
+        public ICommand BrowseJsonFolderCommand { get; }
 
         private void BrowseOriginalGame()
         {
@@ -140,14 +124,18 @@ namespace DarkSunRE.ViewModels
         {
             var path = _uiService.ShowFolderDialog("Select modified game folder");
             if (!string.IsNullOrEmpty(path))
+            {
                 ModifiedGamePath = path;
+                if (string.IsNullOrEmpty(JsonFolderPath))
+                    JsonFolderPath = Path.Combine(ModifiedGamePath, "json");
+            }
         }
 
-        private void BrowseGitRepository()
+        private void BrowseJsonFolder()
         {
-            var path = _uiService.ShowFolderDialog("Select Git repository folder");
+            var path = _uiService.ShowFolderDialog("Select JSON folder");
             if (!string.IsNullOrEmpty(path))
-                GitRepositoryPath = path;
+                JsonFolderPath = path;
         }
 
         private void UpdateDefaultPaths()
@@ -161,9 +149,9 @@ namespace DarkSunRE.ViewModels
                 "Projects",
                 ProjectName);
 
-            if (CreateGitRepository)
+            if (string.IsNullOrEmpty(JsonFolderPath))
             {
-                GitRepositoryPath = ModifiedGamePath;
+                JsonFolderPath = Path.Combine(ModifiedGamePath, "json");
             }
         }
 
@@ -184,8 +172,27 @@ namespace DarkSunRE.ViewModels
 
         private bool ValidatePaths()
         {
-            // Проверка что пути валидны и оригинальная игра существует
-            return Directory.Exists(OriginalGamePath);
+            if (!Directory.Exists(OriginalGamePath))
+            {
+                _statusService.ShowError("Original game path does not exist");
+                return false;
+            }
+
+            // ensure json folder exists or can be created
+            if (!string.IsNullOrEmpty(JsonFolderPath) && !_fileService.DirectoryExists(JsonFolderPath))
+            {
+                try
+                {
+                    _fileService.CreateDirectory(JsonFolderPath);
+                }
+                catch (Exception ex)
+                {
+                    _statusService.ShowError($"Unable to create JSON folder: {ex.Message}", ex);
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private void CreateProject()
@@ -194,27 +201,21 @@ namespace DarkSunRE.ViewModels
             {
                 _statusService.ShowProgress("Creating project...", 0, true);
 
-                // 1. Валидация данных
                 if (!ValidateProjectData())
                     return;
 
-                // 2. Создание директорий
                 if (!CreateProjectDirectories())
                     return;
 
-                // 3. Копирование файлов игры
                 if (!CopyGameFiles())
                     return;
 
-                // 4. Создание файла проекта
                 var projectData = CreateProjectFile();
 
-                // 5. Успешное завершение
                 _statusService.ShowSuccess($"Project '{ProjectName}' created successfully!");
 
                 ProjectCreated?.Invoke(this, new ProjectCreatedEventArgs(projectData));
 
-                // Возвращаем результат
                 OnOk(projectData);
             }
             catch (Exception ex)
@@ -227,44 +228,14 @@ namespace DarkSunRE.ViewModels
             }
         }
 
-        private bool CanCreateProject()
-        {
-            // Проверяем основные условия
-            if (string.IsNullOrWhiteSpace(ProjectName))
-                return false;
-
-            if (string.IsNullOrWhiteSpace(OriginalGamePath))
-                return false;
-
-            if (SelectedGame == null)
-                return false;
-
-            // Проверяем, не существует ли уже проект с таким именем
-            if (_fileService.DirectoryExists(ModifiedGamePath) &&
-                _fileService.GetFiles(ModifiedGamePath).Length > 0)
-            {
-                // Директория не пуста - нужно подтверждение
-                return true; // Разрешаем создание, но покажем предупреждение
-            }
-
-            return true;
-        }
-
-        private void Cancel()
-        {
-            OnCancel();
-        }
-
         private bool ValidateProjectData()
         {
-            // Проверка имени проекта
             if (string.IsNullOrWhiteSpace(ProjectName))
             {
                 _statusService.ShowError("Project name is required");
                 return false;
             }
 
-            // Проверка пути к оригинальной игре
             if (!_fileService.DirectoryExists(OriginalGamePath))
             {
                 _statusService.ShowError("Original game path does not exist");
@@ -278,31 +249,30 @@ namespace DarkSunRE.ViewModels
         {
             try
             {
-                // Проверяем, существует ли директория модифицированной игры
                 if (_fileService.DirectoryExists(ModifiedGamePath))
                 {
                     var files = _fileService.GetFiles(ModifiedGamePath);
                     if (files.Length > 0)
                     {
-                        // Директория не пуста - запрашиваем подтверждение
-                        var result = MessageBox.Show(
+                        var result = System.Windows.MessageBox.Show(
                             $"The directory '{ModifiedGamePath}' is not empty. Overwrite existing files?",
                             "Confirm Overwrite",
-                            MessageBoxButton.YesNo,
-                            MessageBoxImage.Warning);
+                            System.Windows.MessageBoxButton.YesNo,
+                            System.Windows.MessageBoxImage.Warning);
 
-                        if (result != MessageBoxResult.Yes)
+                        if (result != System.Windows.MessageBoxResult.Yes)
                             return false;
 
-                        // Создаем backup или удаляем файлы
                         CreateBackup();
                     }
                 }
                 else
                 {
-                    // Создаем новую директорию
                     _fileService.CreateDirectory(ModifiedGamePath);
                 }
+
+                if (!string.IsNullOrEmpty(JsonFolderPath) && !_fileService.DirectoryExists(JsonFolderPath))
+                    _fileService.CreateDirectory(JsonFolderPath);
 
                 return true;
             }
@@ -362,12 +332,11 @@ namespace DarkSunRE.ViewModels
                 ProjectName = ProjectName,
                 OriginalGamePath = OriginalGamePath,
                 ModifiedGamePath = ModifiedGamePath,
-                GitRepositoryPath = CreateGitRepository ? ModifiedGamePath : null,
+                JsonFolderPath = JsonFolderPath,
                 GameType = SelectedGame.Type,
                 CreatedDate = DateTime.Now,
             };
 
-            // Сохраняем метаданные проекта
             var projectFilePath = Path.Combine(ModifiedGamePath, $"{ProjectName}.dsproj");
             var projectJson = JsonSerializer.Serialize(projectData, new JsonSerializerOptions { WriteIndented = true });
             _fileService.WriteAllText(projectFilePath, projectJson);
@@ -411,6 +380,7 @@ namespace DarkSunRE.ViewModels
             var invalidChars = Path.GetInvalidFileNameChars();
             return new string(name.Where(ch => !invalidChars.Contains(ch)).ToArray());
         }
+
         private void UpdateModifiedGamePath()
         {
             if (!string.IsNullOrEmpty(ProjectName) && SelectedGame != null)
@@ -420,7 +390,19 @@ namespace DarkSunRE.ViewModels
                     "DarkSunEditor",
                     "Projects",
                     ProjectName);
+
+                if (string.IsNullOrEmpty(JsonFolderPath))
+                {
+                    JsonFolderPath = Path.Combine(ModifiedGamePath, "json");
+                }
             }
         }
+    }
+
+    // Event args and DTO used by this VM (kept local)
+    public class ProjectCreatedEventArgs : EventArgs
+    {
+        public ProjectCreationData ProjectData { get; }
+        public ProjectCreatedEventArgs(ProjectCreationData data) => ProjectData = data;
     }
 }

@@ -111,16 +111,23 @@ namespace DarkSunRE.ViewModels
             {
                 case ProjectAction.Created:
                     _statusService.ShowMessage($"Project created: {e.Project.ProjectName}", StatusMessageType.Info);
+                    _statusService.SetProjectPath(e.Project.ModifiedGamePath ?? e.Project.OriginalGamePath);
                     break;
 
-                case ProjectAction.Modified:
-                    IsProjectModified = true;
-                    _statusService.ShowMessage("Project modified", StatusMessageType.Info);
+                case ProjectAction.Opened:
+                    _statusService.ShowMessage($"Project opened: {e.Project.ProjectName}", StatusMessageType.Info);
+                    _statusService.SetProjectPath(e.Project.ModifiedGamePath ?? e.Project.OriginalGamePath);
                     break;
 
                 case ProjectAction.Saved:
                     IsProjectModified = false;
                     _statusService.ShowMessage("Project saved", StatusMessageType.Info);
+                    _statusService.SetProjectPath(e.Project.ModifiedGamePath ?? e.Project.OriginalGamePath);
+                    break;
+
+                case ProjectAction.Modified:
+                    IsProjectModified = true;
+                    _statusService.ShowMessage("Project modified", StatusMessageType.Info);
                     break;
             }
         }

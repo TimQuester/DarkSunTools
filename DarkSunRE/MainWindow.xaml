@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:DarkSunRE"
         xmlns:models="clr-namespace:DarkSunRE.Models"
-        xmlns:avalondock="http://schemas.xceed.com/wpf/xaml/avalondock"        
+        xmlns:avalondock="http://schemas.xceed.com/wpf/xaml/avalondock"
         xmlns:views="clr-namespace:DarkSunRE.Views"
         mc:Ignorable="d"
         Title="Dark Sun Tools" Width="1200" Height="1024">
@@ -26,14 +26,14 @@
             </StackPanel>
         </DataTemplate>
         <Style x:Key="GrayedOutRowStyle" TargetType="DataGridRow" x:Name="GrayedOutRowStyle">
-                <Style.Triggers>
-                    <DataTrigger Binding="{Binding RealString}" Value="False">
-                        <Setter Property="Foreground" Value="Gray"/>
-                        <Setter Property="Opacity" Value="0.7"/>
-                        <Setter Property="Background" Value="#FFF0F0F0"/>
-                    </DataTrigger>
-                </Style.Triggers>
-            </Style>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding RealString}" Value="False">
+                    <Setter Property="Foreground" Value="Gray"/>
+                    <Setter Property="Opacity" Value="0.7"/>
+                    <Setter Property="Background" Value="#FFF0F0F0"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
     <Window.CommandBindings>
         <CommandBinding Command="New" Executed="NewCommand_Executed"/>
@@ -45,7 +45,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="20"/>
+            <RowDefinition Height="40"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="150"/>
@@ -75,7 +75,7 @@
                 <Button Click="LoadJSONGPL_Click" BorderBrush="Black" BorderThickness="1" Content="Load JSON GPL"/>
             </ToolBar>
         </StackPanel>
-        <avalondock:DockingManager Grid.Row="1" Grid.ColumnSpan="3">
+        <avalondock:DockingManager Grid.Row="1" Grid.ColumnSpan="3" Margin="0,0,0,10">
             <avalondock:LayoutRoot>
                 <avalondock:LayoutPanel Orientation="Horizontal">
                     <avalondock:LayoutAnchorablePane>
@@ -102,6 +102,6 @@
                 </avalondock:LayoutPanel>
             </avalondock:LayoutRoot>
         </avalondock:DockingManager>
-        <views:StatusBarView Grid.Row="2" Grid.ColumnSpan="3"/>
+        <views:StatusBarView Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" />
     </Grid>
 </Window>

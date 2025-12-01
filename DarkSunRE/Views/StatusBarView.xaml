@@ -9,34 +9,46 @@
         <conv:ProgressVisibilityConverter x:Key="ProgressVisibilityConverter"/>
     </UserControl.Resources>
 
+    <!-- Border всегда видим; фон зависит от MessageType (конвертер обеспечивает согласованную палитру) -->
     <Border Background="{Binding MessageType, Converter={StaticResource StatusColorConverter}}"
-            Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+            Padding="6">
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>     <!-- Message -->
+                <ColumnDefinition Width="Auto"/>  <!-- Paths -->
+                <ColumnDefinition Width="Auto"/>  <!-- Progress + buttons -->
             </Grid.ColumnDefinitions>
 
-            <!-- Основное сообщение -->
-            <TextBlock Text="{Binding Message}" 
-                       Margin="10,5"
+            <!-- Left: main message (single-line) -->
+            <TextBlock Grid.Column="0"
+                       Text="{Binding Message}"
+                       FontSize="13"
+                       FontWeight="SemiBold"
+                       Foreground="White"
                        VerticalAlignment="Center"
-                       TextTrimming="CharacterEllipsis"/>
+                       TextTrimming="CharacterEllipsis"
+                       Margin="6,0,12,0"/>
 
-            <!-- Progress Bar -->
-            <ProgressBar Grid.Column="1" 
-                        Value="{Binding Progress}"
-                        IsIndeterminate="{Binding IsIndeterminate}"
-                        Width="100" Height="16" Margin="5"
-                        Visibility="{Binding MessageType, Converter={StaticResource ProgressVisibilityConverter}}"/>
+            <!-- Middle: project/json info (stacked, right of message) -->
+            <StackPanel Grid.Column="1" Orientation="Vertical" HorizontalAlignment="Right" Margin="0,0,12,0">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Project: " FontSize="11" Foreground="White" Opacity="0.9" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding ProjectPath}" FontSize="11" Foreground="White" TextTrimming="CharacterEllipsis" MaxWidth="360"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                    <TextBlock Text="JSONs: " FontSize="11" Foreground="White" Opacity="0.9" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding JsonFolder}" FontSize="11" Foreground="White" TextTrimming="CharacterEllipsis" MaxWidth="360"/>
+                </StackPanel>
+            </StackPanel>
 
-            <!-- Кнопки действий -->
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="5">
-                <Button Content="✕" Command="{Binding ClearCommand}" 
-                        ToolTip="Clear message" Width="20" Height="20"/>
-                <Button Content="📋" Command="{Binding ShowHistoryCommand}"
-                        ToolTip="Show message history" Width="20" Height="20"/>
+            <!-- Right: progress + action buttons -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,6,0">
+                <ProgressBar Value="{Binding Progress, Mode=OneWay}"
+                             IsIndeterminate="{Binding IsIndeterminate}"
+                             Width="120" Height="16" Margin="8,0"
+                             Visibility="{Binding MessageType, Converter={StaticResource ProgressVisibilityConverter}}"/>
+                <Button Content="✕" Command="{Binding ClearCommand}" ToolTip="Clear / show last outcome" Width="26" Height="20" Margin="12,0,4,0"/>
+                <Button Content="📋" Command="{Binding ShowHistoryCommand}" ToolTip="Show message history" Width="26" Height="20" Margin="4,0"/>
             </StackPanel>
         </Grid>
     </Border>

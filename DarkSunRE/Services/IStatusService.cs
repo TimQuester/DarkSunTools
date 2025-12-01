@@ -18,6 +18,8 @@ namespace DarkSunRE.Services
         IReadOnlyCollection<StatusMessage> MessageHistory { get; }
         StatusMessage CurrentMessage { get; }
         event EventHandler<StatusChangedEventArgs> StatusChanged;
+        public void SetProjectPath(string path);
+        public void SetJsonFolder(string folder);        
     }
 
     public enum StatusMessageType

@@ -9,17 +9,15 @@
         <conv:ProgressVisibilityConverter x:Key="ProgressVisibilityConverter"/>
     </UserControl.Resources>
 
-    <!-- Border всегда видим; фон зависит от MessageType (конвертер обеспечивает согласованную палитру) -->
     <Border Background="{Binding MessageType, Converter={StaticResource StatusColorConverter}}"
             Padding="6">
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>     <!-- Message -->
-                <ColumnDefinition Width="Auto"/>  <!-- Paths -->
-                <ColumnDefinition Width="Auto"/>  <!-- Progress + buttons -->
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Left: main message (single-line) -->
             <TextBlock Grid.Column="0"
                        Text="{Binding Message}"
                        FontSize="13"
@@ -29,7 +27,6 @@
                        TextTrimming="CharacterEllipsis"
                        Margin="6,0,12,0"/>
 
-            <!-- Middle: project/json info (stacked, right of message) -->
             <StackPanel Grid.Column="1" Orientation="Vertical" HorizontalAlignment="Right" Margin="0,0,12,0">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Project: " FontSize="11" Foreground="White" Opacity="0.9" VerticalAlignment="Center"/>
@@ -41,9 +38,9 @@
                 </StackPanel>
             </StackPanel>
 
-            <!-- Right: progress + action buttons -->
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,6,0">
                 <ProgressBar Value="{Binding Progress, Mode=OneWay}"
+                             Maximum="100"
                              IsIndeterminate="{Binding IsIndeterminate}"
                              Width="120" Height="16" Margin="8,0"
                              Visibility="{Binding MessageType, Converter={StaticResource ProgressVisibilityConverter}}"/>

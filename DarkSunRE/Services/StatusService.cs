@@ -38,7 +38,6 @@ namespace DarkSunRE.Services
             }
         }
 
-        // New properties
         public string ProjectPath
         {
             get => _projectPath;
@@ -84,16 +83,30 @@ namespace DarkSunRE.Services
                 IsIndeterminate = false
             };
 
+            // record last outcome for Clear behavior on success/error
+            if (type == StatusMessageType.Success || type == StatusMessageType.Error)
+            {
+                _lastOutcomeMessage = message;
+                _lastOutcomeType = type;
+            }
+
             PushMessage(msg);
         }
 
         public void ShowProgress(string message, double progress, bool isIndeterminate = false)
         {
+            // Normalize progress: if caller supplies 0..1 interpret as fraction and convert to percentage (0..100).
+            double normalized = progress;
+            if (!double.IsNaN(progress) && progress >= 0.0 && progress <= 1.0)
+            {
+                normalized = progress * 100.0;
+            }
+
             var msg = new StatusMessage
             {
                 Message = message,
                 Type = StatusMessageType.Progress,
-                Progress = progress,
+                Progress = normalized,
                 IsIndeterminate = isIndeterminate,
                 Timestamp = DateTime.Now
             };
@@ -125,7 +138,6 @@ namespace DarkSunRE.Services
                 Timestamp = DateTime.Now
             };
 
-            // record last outcome as failure
             _lastOutcomeMessage = message;
             _lastOutcomeType = StatusMessageType.Error;
 
@@ -153,14 +165,12 @@ namespace DarkSunRE.Services
                 Timestamp = DateTime.Now
             };
 
-            // record last outcome as success
             _lastOutcomeMessage = message;
             _lastOutcomeType = StatusMessageType.Success;
 
             PushMessage(msg);
         }
 
-        // New public setters for external callers
         public void SetProjectPath(string path)
         {
             ProjectPath = path ?? string.Empty;

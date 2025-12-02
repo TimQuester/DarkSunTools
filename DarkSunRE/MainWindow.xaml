@@ -39,6 +39,7 @@
         <CommandBinding Command="New" Executed="NewCommand_Executed"/>
         <CommandBinding Command="Open" Executed="OpenCommand_Executed"/>
         <CommandBinding Command="Save" Executed="SaveCommand_Executed"/>
+        <CommandBinding Command="Properties" Executed="SettingsCommand_Executed"/>
     </Window.CommandBindings>
 
     <Grid>
@@ -60,14 +61,16 @@
                     <MenuItem Header="_New Project" Command="New" InputGestureText="Ctrl+N"/>
                     <MenuItem Header="_Open Project" Command="Open" InputGestureText="Ctrl+O"/>
                     <MenuItem Header="_Save Project" Command="Save" InputGestureText="Ctrl+S"/>
+                    <MenuItem Header="Project Settings" Command="Properties"/>
                     <Separator/>
                     <MenuItem Header="E_xit" Command="{Binding ExitCommand}"/>
                 </MenuItem>
             </Menu>
             <ToolBar>
                 <Button Command="New" ToolTip="New Project (Ctrl+N)">New Project</Button>
-                <Button Command="Open" ToolTip="New Project (Ctrl+N)">Open Project</Button>
+                <Button Command="Open" ToolTip="Open Project (Ctrl+O)">Open Project</Button>
                 <Button Command="Save" ToolTip="Save Project (Ctrl+S)">Save Project</Button>
+                <Button Command="Properties" ToolTip="Project settings">Settings</Button>
                 <Button Click="MenuItem_Click" BorderBrush="Black" BorderThickness ="1">Open folder</Button>
                 <Button Click="UpdateGPL_Click" BorderBrush="Black" BorderThickness="1" HorizontalAlignment="Left">Update GPL</Button>
                 <Button Click="SaveNewGPL_Click" BorderBrush="Black" BorderThickness="1" Content="Save new GPL"/>
@@ -80,13 +83,6 @@
                 <avalondock:LayoutPanel Orientation="Horizontal">
                     <avalondock:LayoutAnchorablePane>
                         <avalondock:LayoutAnchorable Title="Files">
-                            <!--<TreeView x:Name="FileTree" Width="auto">
-                                <TreeView.ItemContainerStyle>
-                                    <Style TargetType="TreeViewItem">
-                                        <EventSetter Event="MouseDoubleClick" Handler="TreeViewItem_MouseDoubleClick"/>
-                                    </Style>
-                                </TreeView.ItemContainerStyle>
-                            </TreeView>-->
                             <views:ProjectTreeView DataContext="{Binding ProjectTree}"
                                    Grid.Column="0"/>
                         </avalondock:LayoutAnchorable>

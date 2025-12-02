@@ -68,19 +68,20 @@ namespace DarkSunRE.Services
             var expectedFiles = _fileService.GetExpectedGameFiles(gameType);
 
             // Copy files asynchronously
-            foreach (var file in expectedFiles)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
+            //foreach (var file in expectedFiles)
+            //{
+            //    cancellationToken.ThrowIfCancellationRequested();
 
-                var sourcePath = _fileService.CombinePaths(originalPath, file);
-                var destPath = _fileService.CombinePaths(modifiedPath, file);
+            //    var sourcePath = _fileService.CombinePaths(originalPath, file);
+            //    var destPath = _fileService.CombinePaths(modifiedPath, file);
 
-                if (_fileService.FileExists(sourcePath))
-                {
-                    var data = await _fileService.ReadAllBytesAsync(sourcePath, cancellationToken).ConfigureAwait(false);
-                    await _fileService.WriteAllBytesAsync(destPath, data, cancellationToken).ConfigureAwait(false);
-                }
-            }
+            //    if (_fileService.FileExists(sourcePath))
+            //    {
+            //        //TODO: freezes
+            //        var data = await _fileService.ReadAllBytesAsync(sourcePath, cancellationToken).ConfigureAwait(false);
+            //        await _fileService.WriteAllBytesAsync(destPath, data, cancellationToken).ConfigureAwait(false);
+            //    }
+            //}
 
             var project = new Project
             {

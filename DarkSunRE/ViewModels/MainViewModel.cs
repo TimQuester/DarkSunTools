@@ -31,7 +31,7 @@ namespace DarkSunRE.ViewModels
         public ICommand SaveProjectCommand { get; }
         public ICommand ExitCommand { get; }
         public ICommand CancelOperationCommand { get; }
-        public ICommand OpenSettingsCommand { get; }
+        public ICommand SettingsCommand { get; }
 
         public bool IsModified;
 
@@ -55,7 +55,7 @@ namespace DarkSunRE.ViewModels
             SaveProjectCommand = new AsyncRelayCommand(SaveProjectAsync, () => CurrentProject != null && IsModified);
             CancelOperationCommand = new RelayCommand(CancelOperation, () => IsBusy);
             ExitCommand = new RelayCommand(ExecuteExit);
-            OpenSettingsCommand = new RelayCommand(OpenSettings);
+            SettingsCommand = new RelayCommand(OpenSettings);
         }
 
         // Implemented to handle events coming from services (ResourceChanged)
@@ -284,6 +284,7 @@ namespace DarkSunRE.ViewModels
         {
             ;
         }
+
         private void OnResourceOpened(object sender, ResourceEventArgs e)
         {
             // Обработка открытия ресурса

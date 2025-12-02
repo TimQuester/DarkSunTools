@@ -72,6 +72,7 @@ namespace DarkSunRE
             services.AddTransient<CreateProjectViewModel>();
             services.AddTransient<StatusBarViewModel>();
             services.AddTransient<ProjectTreeViewModel>();
+            services.AddTransient<ProjectSettingsViewModel>();
 
             // register view types if you want to resolve them via DI
             services.AddTransient<MainWindow>();

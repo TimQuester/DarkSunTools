@@ -23,7 +23,7 @@ namespace DarkSunRE.ViewModels
         private string _modifiedGamePath;
         private string _jsonFolderPath;
 
-        public event EventHandler<ProjectCreatedEventArgs> ProjectCreated;
+        public event EventHandler<ProjectCreatedEventArgs>? ProjectCreated;
 
         public CreateProjectViewModel(
             IGameDefinitionService gameDefinitionService,

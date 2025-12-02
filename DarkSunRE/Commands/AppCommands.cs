@@ -12,6 +12,7 @@ namespace DarkSunRE.Commands
         public static ICommand NewProject { get; }
         public static ICommand OpenProject { get; }
         public static ICommand SaveProject { get; }
+        public static ICommand Settings { get; }
         public static ICommand SaveAll { get; }
         public static ICommand ExportResource { get; }
         public static ICommand ImportResource { get; }

@@ -1,23 +1,12 @@
 ﻿using DarkSunRE.Models;
 using DarkSunRE.ViewModels;
 using Microsoft.Win32;
-using System;
-using System.Collections;
 using System.IO;
-using System.Linq;
-using System.Reflection.Metadata;
-using System.Reflection.PortableExecutable;
-using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 using Xceed.Wpf.AvalonDock.Layout;
 using DarkSunRE.ViewModels;
 using DSunTools.Common.Gff;
@@ -245,6 +234,13 @@ namespace DarkSunRE
             if (DataContext is MainViewModel vm && vm.SaveProjectCommand?.CanExecute(null) == true)
             {
                 vm.SaveProjectCommand.Execute(null);
+            }
+        }
+        private void SettingsCommand_Executed(object sender, ExecutedRoutedEventArgs e)
+        {
+            if (DataContext is MainViewModel vm && vm.SettingsCommand.CanExecute(null))
+            {
+                vm.SettingsCommand.Execute(null);
             }
         }
     }

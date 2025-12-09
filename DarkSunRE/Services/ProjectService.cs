@@ -43,18 +43,18 @@ namespace DarkSunRE.Services
         }
 
         // Async implementation of project creation (copies files and loads resources)
-        public async Task<Project> CreateNewProjectAsync(object originalGamePathObj, object modifiedGamePathObj, object gitRepositoryPathObj, object type)
+        public async Task<Project> CreateNewProjectAsync(object originalGamePathObj, object modifiedGamePathObj, object JsonFolderPathObj, object type)
         {
             // Interface uses object parameters; coerce to expected types
             var originalPath = originalGamePathObj as string ?? throw new ArgumentException("originalGamePath must be a string", nameof(originalGamePathObj));
             var modifiedPath = modifiedGamePathObj as string ?? throw new ArgumentException("modifiedGamePath must be a string", nameof(modifiedGamePathObj));
-            var gitPath = gitRepositoryPathObj as string;
+            var jsonPath = JsonFolderPathObj as string;
             var gameType = type is ProjectType pt ? pt : throw new ArgumentException("type must be ProjectType", nameof(type));
 
-            return await CreateNewProjectAsync(originalPath, modifiedPath, gitPath, gameType, CancellationToken.None).ConfigureAwait(false);
+            return await CreateNewProjectAsync(originalPath, modifiedPath, jsonPath, gameType, CancellationToken.None).ConfigureAwait(false);
         }
 
-        public async Task<Project> CreateNewProjectAsync(string originalPath, string modifiedPath, string gitPath, ProjectType gameType, CancellationToken cancellationToken)
+        public async Task<Project> CreateNewProjectAsync(string originalPath, string modifiedPath, string jsonPath, ProjectType gameType, CancellationToken cancellationToken)
         {
             if (!_fileService.IsValidGamePath(originalPath, gameType))
                 throw new InvalidOperationException("Invalid game path");
@@ -62,8 +62,8 @@ namespace DarkSunRE.Services
             if (!_fileService.DirectoryExists(modifiedPath))
                 _fileService.CreateDirectory(modifiedPath);
 
-            if (gitPath != null && !_fileService.DirectoryExists(gitPath))
-                _fileService.CreateDirectory(gitPath);
+            if (jsonPath != null && !_fileService.DirectoryExists(jsonPath))
+                _fileService.CreateDirectory(jsonPath);
 
             var expectedFiles = _fileService.GetExpectedGameFiles(gameType);
 
@@ -87,7 +87,7 @@ namespace DarkSunRE.Services
             {
                 OriginalGamePath = originalPath,
                 ModifiedGamePath = modifiedPath,
-                GitRepositoryPath = gitPath,
+                JsonFolderPath = jsonPath,
                 ProjectType = gameType,
             };
 
@@ -256,7 +256,7 @@ namespace DarkSunRE.Services
                     ProjectName = dto.ProjectName,
                     OriginalGamePath = dto.OriginalGamePath,
                     ModifiedGamePath = dto.ModifiedGamePath,
-                    GitRepositoryPath = dto.GitRepositoryPath,
+                    JsonFolderPath = dto.JsonFolderPath,
                     Created = dto.CreatedDate ?? DateTime.Now,
                     LastModified = dto.LastModifiedDate ?? File.GetLastWriteTime(projectFilePath),
                     ProjectType = dto.GameType
@@ -306,7 +306,7 @@ namespace DarkSunRE.Services
                     ProjectName = project.ProjectName,
                     OriginalGamePath = project.OriginalGamePath,
                     ModifiedGamePath = project.ModifiedGamePath,
-                    GitRepositoryPath = project.GitRepositoryPath,
+                    JsonFolderPath = project.JsonFolderPath,
                     GameType = project.ProjectType,
                     CreatedDate = project.Created,
                     LastModifiedDate = DateTime.Now
@@ -405,7 +405,7 @@ namespace DarkSunRE.Services
             public string ProjectName { get; set; }
             public string OriginalGamePath { get; set; }
             public string ModifiedGamePath { get; set; }
-            public string GitRepositoryPath { get; set; }
+            public string JsonFolderPath { get; set; }
             public ProjectType GameType { get; set; }
             public DateTime? CreatedDate { get; set; }
             public DateTime? LastModifiedDate { get; set; }

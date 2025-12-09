@@ -74,7 +74,7 @@
                     Margin="5"/>
         </Grid>
 
-        <!-- JSON Folder Path (replaces Git) -->
+        <!-- JSON Folder Path -->
         <TextBlock Text="JSON Folder Path:" Grid.Row="8" FontWeight="Bold" Margin="0,10,0,0"/>
         <Grid Grid.Row="9">
             <Grid.ColumnDefinitions>

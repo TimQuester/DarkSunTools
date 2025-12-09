@@ -40,7 +40,7 @@ namespace DarkSunRE.ViewModels
             if (project == null) return;
             OriginalGamePath = project.OriginalGamePath;
             ModifiedGamePath = project.ModifiedGamePath;
-            JsonFolderPath = project.GitRepositoryPath ?? project.GitRepositoryPath; // legacy field may still be present
+            JsonFolderPath = project.JsonFolderPath ?? project.JsonFolderPath; // legacy field may still be present
             OnPropertyChanged(nameof(OriginalGamePath));
             OnPropertyChanged(nameof(ModifiedGamePath));
             OnPropertyChanged(nameof(JsonFolderPath));

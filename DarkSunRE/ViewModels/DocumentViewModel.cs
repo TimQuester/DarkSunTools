@@ -10,7 +10,7 @@ namespace DarkSunRE.ViewModels
 {
     public abstract class DocumentViewModel : INotifyPropertyChanged
     {
-        public string Title { get; set; }
+        public string Title { get; set; }        
         public string ToolTip { get; set; }
         public bool CanClose { get; set; }
         public bool IsModified { get; set; }

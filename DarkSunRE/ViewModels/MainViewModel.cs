@@ -176,7 +176,7 @@ namespace DarkSunRE.ViewModels
                 var project = _projectService.CreateNewProject(
                     e.ProjectData.OriginalGamePath,
                     e.ProjectData.ModifiedGamePath,
-                    e.ProjectData.JsonFolderPath, // <-- передаём JSON folder вместо старого gitPath
+                    e.ProjectData.JsonFolderPath,
                     e.ProjectData.GameType);
 
                 CurrentProject = project;
@@ -206,8 +206,7 @@ namespace DarkSunRE.ViewModels
                 {
                     _statusService.ShowProgress(s.Message, s.Progress ?? 0, s.IsIndeterminate);
                 });
-
-                // await without ConfigureAwait(false) so continuation runs on UI thread
+                
                 var project = await _projectService.LoadProjectAsync(filePath, progress, _operationCts.Token);
 
                 if (project == null)
@@ -215,8 +214,7 @@ namespace DarkSunRE.ViewModels
                     _statusService.ShowError($"Failed to open project: {Path.GetFileName(filePath)}");
                     return;
                 }
-
-                // Update bound properties on UI thread
+                
                 CurrentProject = project;
                 IsModified = false;
                 OnPropertyChanged(nameof(IsModified));
@@ -251,8 +249,7 @@ namespace DarkSunRE.ViewModels
             {
                 IsBusy = true;
                 OnPropertyChanged(nameof(IsBusy));
-
-                // await without ConfigureAwait(false) so continuation runs on UI thread
+                
                 await _projectService.SaveProjectAsync(CurrentProject);
 
                 _statusService.ShowSuccess($"Project '{CurrentProject.ProjectName}' saved.");
@@ -309,26 +306,16 @@ namespace DarkSunRE.ViewModels
             vm.InitializeFromProject(CurrentProject);
             var result = _dialogService.ShowDialog(vm);
             if (result == true)
-            {
-                // vm returned data via OnOk payload
-                if (vm.DialogResult == true)
-                {
-                    // payload was passed to RequestClose in BaseDialogViewModel; try to read via reflection-like pattern:
-                    // We used OnOk(new { Original = ..., Modified = ..., Json = ... })
-                    // But RequestClose sends DialogResultEventArgs with resultData; DialogService set window.DialogResult = e.Result
-                    // To access result data we should extend BaseDialogViewModel or keep a simple contract: after dialog closes, read vm properties
-                    // We'll just copy properties set in VM back to project if present
+            {                
+                if (vm.DialogResult == true)                
                     if (CurrentProject != null)
                     {
                         CurrentProject.OriginalGamePath = vm.OriginalGamePath;
-                        CurrentProject.ModifiedGamePath = vm.ModifiedGamePath;
-                        // map JsonFolderPath -> project's Json storage field (we used GitRepositoryPath historically)
-                        CurrentProject.GitRepositoryPath = vm.JsonFolderPath;
-                        _statusService.SetProjectPath(CurrentProject.ModifiedGamePath ?? CurrentProject.OriginalGamePath);
-                        // Optionally save project metadata
+                        CurrentProject.ModifiedGamePath = vm.ModifiedGamePath;                        
+                        CurrentProject.JsonFolderPath = vm.JsonFolderPath;
+                        _statusService.SetProjectPath(CurrentProject.ModifiedGamePath ?? CurrentProject.OriginalGamePath);                        
                         _projectService.SaveProject(CurrentProject);
-                    }
-                }
+                    }                
             }
         }
     }

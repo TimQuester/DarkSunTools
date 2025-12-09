@@ -67,7 +67,7 @@ namespace DarkSunRE.Models
         /// <summary>
         /// Путь к репозиторию с сериализованными данными
         /// </summary>
-        public string GitRepositoryPath { get; set; }                
+        public string JsonFolderPath { get; set; }                
         /// <summary>
         /// Дата создания проекта
         /// </summary>

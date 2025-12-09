@@ -8,7 +8,6 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using Xceed.Wpf.AvalonDock.Layout;
-using DarkSunRE.ViewModels;
 using DSunTools.Common.Gff;
 
 namespace DarkSunRE
@@ -153,11 +152,14 @@ namespace DarkSunRE
             var doc = FindOpenedDocumentByLayoutTitle(((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
             if (doc == null) return;
 
-            using (FileStream fs = new FileStream($"{doc.Path}.json", FileMode.Create))
+            if (DataContext is MainViewModel vm && vm.CurrentProject.JsonFolderPath != null)
             {
-                JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions()
-                { WriteIndented = true };
-                JsonSerializer.Serialize<List<GPLString>>(fs, doc.decodedStrings, jsonSerializerOptions);
+                using (FileStream fs = new FileStream($"{vm.CurrentProject.JsonFolderPath}\\{doc.Name.Replace(':', '-')}.json", FileMode.Create))
+                {
+                    JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions()
+                    { WriteIndented = true };
+                    JsonSerializer.Serialize<List<GPLString>>(fs, doc.decodedStrings, jsonSerializerOptions);
+                }
             }
         }
 

@@ -313,6 +313,7 @@ namespace DarkSunRE.ViewModels
                         CurrentProject.OriginalGamePath = vm.OriginalGamePath;
                         CurrentProject.ModifiedGamePath = vm.ModifiedGamePath;                        
                         CurrentProject.JsonFolderPath = vm.JsonFolderPath;
+                        CurrentProject.TransliterationRules = vm.GetTransliterationRules();
                         _statusService.SetProjectPath(CurrentProject.ModifiedGamePath ?? CurrentProject.OriginalGamePath);                        
                         _projectService.SaveProject(CurrentProject);
                     }                

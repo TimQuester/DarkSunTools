@@ -259,7 +259,8 @@ namespace DarkSunRE.Services
                     JsonFolderPath = dto.JsonFolderPath,
                     Created = dto.CreatedDate ?? DateTime.Now,
                     LastModified = dto.LastModifiedDate ?? File.GetLastWriteTime(projectFilePath),
-                    ProjectType = dto.GameType
+                    ProjectType = dto.GameType,
+                    TransliterationRules = dto.TransliterationRules ?? new List<TransliterationRule>()
                 };
 
                 progress?.Report(new StatusMessage { Message = "Loading resource files...", Type = StatusMessageType.Progress, IsIndeterminate = false, Progress = 0, Timestamp = DateTime.Now });
@@ -309,7 +310,8 @@ namespace DarkSunRE.Services
                     JsonFolderPath = project.JsonFolderPath,
                     GameType = project.ProjectType,
                     CreatedDate = project.Created,
-                    LastModifiedDate = DateTime.Now
+                    LastModifiedDate = DateTime.Now,
+                    TransliterationRules = project.TransliterationRules
                 };
 
                 if (!_fileService.DirectoryExists(project.ModifiedGamePath))
@@ -409,6 +411,7 @@ namespace DarkSunRE.Services
             public ProjectType GameType { get; set; }
             public DateTime? CreatedDate { get; set; }
             public DateTime? LastModifiedDate { get; set; }
+            public List<TransliterationRule> TransliterationRules { get; set; }
         }
     }
 }

@@ -85,6 +85,7 @@ namespace DarkSunRE.ViewModels
 
                         if (doc != null)
                         {
+                            doc.TransliterationRules = CurrentProject.TransliterationRules ?? new List<TransliterationRule>();
                             doc.ApplyStringChanges();
                             updatedBytes = gff.ReplaceResource(resource.Tag, resource.Number, doc.newBytes);
                             gff = DSunTools.Common.Gff.GffFile.Create(updatedBytes); // refresh tables for next replace

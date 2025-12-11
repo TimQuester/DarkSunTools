@@ -56,6 +56,7 @@ namespace DarkSunRE
                 GPLDocument document;
                 if (existingDoc != null)
                 {
+                    existingDoc.TransliterationRules = project.TransliterationRules ?? new List<TransliterationRule>();
                     document = existingDoc;
                 }
                 else
@@ -76,7 +77,7 @@ namespace DarkSunRE
 
                     string docName = $"{container.Name}:{resource.Tag}-{resource.Number}";
                     string resourceName = $"{resource.Tag}-{resource.Number}";
-                    document = new GPLDocument(resourceBytes, docName, container.FullPath, container.Name, resourceName);
+                    document = new GPLDocument(resourceBytes, docName, container.FullPath, container.Name, resourceName, project.TransliterationRules);
                     project.OpenedDocuments.Add(document);
                 }
 

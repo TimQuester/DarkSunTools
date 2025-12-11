@@ -77,6 +77,10 @@ namespace DarkSunRE.Models
         /// </summary>
         public DateTime LastModified { get; set; }
         public ProjectType ProjectType { get; set; }
+        /// <summary>
+        /// Таблица транслитерации для перекодирования ресурсов
+        /// </summary>
+        public List<TransliterationRule> TransliterationRules { get; set; } = new();
         #endregion
     }
 }

@@ -16,13 +16,15 @@ namespace DarkSunRE.Models
         public byte[] originalBytes { get; }
         public byte[] newBytes { get; private set; }
         public List<GPLString> decodedStrings { get; set; } = new List<GPLString>();
+        public List<TransliterationRule> TransliterationRules { get; set; } = new();
 
-        public GPLDocument(byte[] resourceBytes, string name, string path = null, string fileName = null, string resourceName = null)
+        public GPLDocument(byte[] resourceBytes, string name, string path = null, string fileName = null, string resourceName = null, List<TransliterationRule> transliterationRules = null)
         {
             Name = name;
             Path = path ?? name;
             FileName = fileName ?? name;
             ResourceName = resourceName ?? name;
+            TransliterationRules = transliterationRules ?? new List<TransliterationRule>();
             originalBytes = resourceBytes ?? Array.Empty<byte>();
             newBytes = (byte[])originalBytes.Clone();
 
@@ -31,7 +33,7 @@ namespace DarkSunRE.Models
 
         public void ApplyStringChanges()
         {
-            newBytes = ApplyStringChangesToBytes(originalBytes, decodedStrings);
+            newBytes = ApplyStringChangesToBytes(originalBytes, decodedStrings, TransliterationRules);
         }
 
         public void RefreshNewBytesAfterLoadJson()
@@ -135,7 +137,7 @@ namespace DarkSunRE.Models
             return outb;
         }
 
-        private static byte[] ApplyStringChangesToBytes(byte[] originalBytes, List<GPLString> strings)
+        private static byte[] ApplyStringChangesToBytes(byte[] originalBytes, List<GPLString> strings, List<TransliterationRule> transliterationRules)
         {
             if (originalBytes == null) return Array.Empty<byte>();
             var newBytesList = new List<byte>(originalBytes);
@@ -160,6 +162,11 @@ namespace DarkSunRE.Models
                     string originalString = gpl.OriginalString ?? string.Empty;
                     string newString = gpl.NewString ?? string.Empty;
 
+                    if (transliterationRules != null && transliterationRules.Count > 0)
+                    {
+                        newString = ApplyTransliteration(newString, transliterationRules);
+                    }
+
                     if (!string.Equals(originalString, newString, StringComparison.Ordinal))
                     {
                         var encoded = EncodeStringWithFixedSize(newString, originalBlockSize);
@@ -182,6 +189,23 @@ namespace DarkSunRE.Models
             }
 
             return newBytesList.ToArray();
+        }
+
+        private static string ApplyTransliteration(string input, List<TransliterationRule> rules)
+        {
+            if (string.IsNullOrEmpty(input) || rules == null || rules.Count == 0)
+                return input;
+
+            string result = input;
+            foreach (var rule in rules)
+            {
+                if (rule == null) continue;
+                var from = rule.From ?? string.Empty;
+                var to = rule.To ?? string.Empty;
+                if (from.Length == 0) continue;
+                result = result.Replace(from, to);
+            }
+            return result;
         }
 
         private static byte[] EncodeStringWithFixedSize(string str, int targetSize)

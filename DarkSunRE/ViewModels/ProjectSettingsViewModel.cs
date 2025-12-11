@@ -2,6 +2,7 @@ using DarkSunRE.Commands;
 using DarkSunRE.Models;
 using DarkSunRE.Services;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Windows.Input;
 
@@ -28,6 +29,7 @@ namespace DarkSunRE.ViewModels
         public string OriginalGamePath { get; set; }
         public string ModifiedGamePath { get; set; }
         public string JsonFolderPath { get; set; }
+        public string TransliterationTableText { get; set; }
 
         public ICommand BrowseOriginalCommand { get; }
         public ICommand BrowseModifiedCommand { get; }
@@ -41,9 +43,11 @@ namespace DarkSunRE.ViewModels
             OriginalGamePath = project.OriginalGamePath;
             ModifiedGamePath = project.ModifiedGamePath;
             JsonFolderPath = project.JsonFolderPath ?? project.JsonFolderPath; // legacy field may still be present
+            TransliterationTableText = BuildTableText(project.TransliterationRules);
             OnPropertyChanged(nameof(OriginalGamePath));
             OnPropertyChanged(nameof(ModifiedGamePath));
             OnPropertyChanged(nameof(JsonFolderPath));
+            OnPropertyChanged(nameof(TransliterationTableText));
         }
 
         private void BrowseOriginal()
@@ -75,12 +79,39 @@ namespace DarkSunRE.ViewModels
         private void Save()
         {
             // Return edited paths via DialogResult payload
-            OnOk(new { Original = OriginalGamePath, Modified = ModifiedGamePath, Json = JsonFolderPath });
+            OnOk(new { Original = OriginalGamePath, Modified = ModifiedGamePath, Json = JsonFolderPath, TransliterationRules = ParseTable(TransliterationTableText) });
         }
 
         private void Cancel()
         {
             OnCancel();
         }
+
+        private static string BuildTableText(IEnumerable<TransliterationRule> rules)
+        {
+            if (rules == null) return string.Empty;
+            return string.Join(";", rules.Select(r => $"{r.From}={r.To}"));
+        }
+
+        private static List<TransliterationRule> ParseTable(string text)
+        {
+            var result = new List<TransliterationRule>();
+            if (string.IsNullOrWhiteSpace(text)) return result;
+
+            var segments = text.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var segment in segments)
+            {
+                var line = segment.Trim();
+                if (line.Length == 0) continue;
+                var parts = line.Split(new[] { '=' }, 2);
+                if (parts.Length == 2)
+                {
+                    result.Add(new TransliterationRule { From = parts[0], To = parts[1] });
+                }
+            }
+            return result;
+        }
+
+        public List<TransliterationRule> GetTransliterationRules() => ParseTable(TransliterationTableText);
     }
 }

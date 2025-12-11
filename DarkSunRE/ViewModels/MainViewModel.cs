@@ -114,17 +114,20 @@ namespace DarkSunRE.ViewModels
                 case ProjectAction.Created:
                     _statusService.ShowMessage($"Project created: {e.Project.ProjectName}", StatusMessageType.Info);
                     _statusService.SetProjectPath(e.Project.ModifiedGamePath ?? e.Project.OriginalGamePath);
+                    _statusService.SetJsonFolder(e.Project.JsonFolderPath);
                     break;
 
                 case ProjectAction.Opened:
                     _statusService.ShowMessage($"Project opened: {e.Project.ProjectName}", StatusMessageType.Info);
                     _statusService.SetProjectPath(e.Project.ModifiedGamePath ?? e.Project.OriginalGamePath);
+                    _statusService.SetJsonFolder(e.Project.JsonFolderPath);
                     break;
 
                 case ProjectAction.Saved:
                     IsProjectModified = false;
                     _statusService.ShowMessage("Project saved", StatusMessageType.Info);
                     _statusService.SetProjectPath(e.Project.ModifiedGamePath ?? e.Project.OriginalGamePath);
+                    _statusService.SetJsonFolder(e.Project.JsonFolderPath);
                     break;
 
                 case ProjectAction.Modified:
@@ -314,7 +317,8 @@ namespace DarkSunRE.ViewModels
                         CurrentProject.ModifiedGamePath = vm.ModifiedGamePath;                        
                         CurrentProject.JsonFolderPath = vm.JsonFolderPath;
                         CurrentProject.TransliterationRules = vm.GetTransliterationRules();
-                        _statusService.SetProjectPath(CurrentProject.ModifiedGamePath ?? CurrentProject.OriginalGamePath);                        
+                        _statusService.SetProjectPath(CurrentProject.ModifiedGamePath ?? CurrentProject.OriginalGamePath);
+                        _statusService.SetJsonFolder(CurrentProject.JsonFolderPath);
                         _projectService.SaveProject(CurrentProject);
                     }                
             }

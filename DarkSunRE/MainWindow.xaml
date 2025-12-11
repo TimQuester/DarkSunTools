@@ -46,19 +46,17 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="40"/>
+            <RowDefinition Height="50"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="150"/>
-            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="150"/>
         </Grid.ColumnDefinitions>
         <StackPanel Grid.Row="0" Grid.ColumnSpan="3">
             <Menu>
                 <MenuItem Header="_File">
-                    <MenuItem Header="Open folder" Click="MenuItem_Click"/>
-                    <Separator/>
-                    <MenuItem Header="_New Project" Command="New" InputGestureText="Ctrl+N"/>
+                <MenuItem Header="_New Project" Command="New" InputGestureText="Ctrl+N"/>
                     <MenuItem Header="_Open Project" Command="Open" InputGestureText="Ctrl+O"/>
                     <MenuItem Header="_Save Project" Command="Save" InputGestureText="Ctrl+S"/>
                     <MenuItem Header="Project Settings" Command="Properties"/>
@@ -71,9 +69,6 @@
                 <Button Command="Open" ToolTip="Open Project (Ctrl+O)">Open Project</Button>
                 <Button Command="Save" ToolTip="Save Project (Ctrl+S)">Save Project</Button>
                 <Button Command="Properties" ToolTip="Project settings">Settings</Button>
-                <Button Click="MenuItem_Click" BorderBrush="Black" BorderThickness ="1">Open folder</Button>
-                <Button Click="UpdateGPL_Click" BorderBrush="Black" BorderThickness="1" HorizontalAlignment="Left">Update GPL</Button>
-                <Button Click="SaveNewGPL_Click" BorderBrush="Black" BorderThickness="1" Content="Save new GPL"/>
                 <Button Click="SaveJSONGPL_Click" BorderBrush="Black" BorderThickness="1" Content="Save JSON GPL"/>
                 <Button Click="LoadJSONGPL_Click" BorderBrush="Black" BorderThickness="1" Content="Load JSON GPL"/>
             </ToolBar>

@@ -53,6 +53,72 @@ namespace DarkSunRE.ViewModels
         public ICommand RefreshCommand { get; }
         public ICommand DoubleClickCommand { get; }
 
+        public void SaveAllJsons(ProjectNode node)
+        {
+            if (CurrentProject == null || string.IsNullOrWhiteSpace(CurrentProject.JsonFolderPath))
+            {
+                _statusService.ShowError("JSON folder path is not configured.");
+                return;
+            }
+
+            if (node?.Item is not ResourceFile file || file.Resources == null)
+            {
+                _statusService.ShowError("Invalid file selection.");
+                return;
+            }
+
+            Directory.CreateDirectory(CurrentProject.JsonFolderPath);
+
+            foreach (var resource in file.Resources)
+            {
+                var doc = CurrentProject.OpenedDocuments.FirstOrDefault(d =>
+                    string.Equals(d.FileName, file.Name, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(d.ResourceName, $"{resource.Tag}-{resource.Number}", StringComparison.OrdinalIgnoreCase));
+
+                if (doc != null)
+                {
+                    var vm = new GplDocumentViewModel(doc);
+                    vm.SaveJson(CurrentProject.JsonFolderPath);
+                }
+            }
+
+            _statusService.ShowSuccess("All JSONs saved.");
+        }
+
+        public void LoadAllJsons(ProjectNode node)
+        {
+            if (CurrentProject == null || string.IsNullOrWhiteSpace(CurrentProject.JsonFolderPath))
+            {
+                _statusService.ShowError("JSON folder path is not configured.");
+                return;
+            }
+
+            if (node?.Item is not ResourceFile file || file.Resources == null)
+            {
+                _statusService.ShowError("Invalid file selection.");
+                return;
+            }
+
+            foreach (var resource in file.Resources)
+            {
+                var doc = CurrentProject.OpenedDocuments.FirstOrDefault(d =>
+                    string.Equals(d.FileName, file.Name, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(d.ResourceName, $"{resource.Tag}-{resource.Number}", StringComparison.OrdinalIgnoreCase));
+
+                if (doc != null)
+                {
+                    var path = Path.Combine(CurrentProject.JsonFolderPath, $"{doc.FileName}_{doc.ResourceName}.json");
+                    if (File.Exists(path))
+                    {
+                        var vm = new GplDocumentViewModel(doc);
+                        vm.LoadJson(path);
+                    }
+                }
+            }
+
+            _statusService.ShowSuccess("All JSONs loaded.");
+        }
+
         public void GenerateNewFile(ProjectNode node)
         {
             if (node == null || node.ItemType != ProjectItemType.GffFile || CurrentProject == null)

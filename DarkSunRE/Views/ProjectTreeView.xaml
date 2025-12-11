@@ -5,13 +5,22 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:DarkSunRE.Models"
              mc:Ignorable="d" 
-             d:DesignHeight="450" d:DesignWidth="800">
+             d:DesignHeight="450" d:DesignWidth="200">
     <UserControl.Resources>
         <Style x:Key="GenerateFileMenuItemStyle" TargetType="MenuItem">
             <EventSetter Event="Click" Handler="GenerateNewFile_Click"/>
         </Style>
+        <Style x:Key="SaveAllJsonsMenuItemStyle" TargetType="MenuItem">
+            <EventSetter Event="Click" Handler="SaveAllJsons_Click"/>
+        </Style>
+        <Style x:Key="LoadAllJsonsMenuItemStyle" TargetType="MenuItem">
+            <EventSetter Event="Click" Handler="LoadAllJsons_Click"/>
+        </Style>
         <ContextMenu x:Key="GffFileContextMenu">
             <MenuItem Header="Generate new file" Style="{StaticResource GenerateFileMenuItemStyle}"/>
+            <Separator/>
+            <MenuItem Header="Save all JSONs" Style="{StaticResource SaveAllJsonsMenuItemStyle}"/>
+            <MenuItem Header="Load all JSONs" Style="{StaticResource LoadAllJsonsMenuItemStyle}"/>
         </ContextMenu>
     </UserControl.Resources>
     <DockPanel>

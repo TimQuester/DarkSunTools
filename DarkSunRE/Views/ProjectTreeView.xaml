@@ -6,6 +6,14 @@
              xmlns:local="clr-namespace:DarkSunRE.Models"
              mc:Ignorable="d" 
              d:DesignHeight="450" d:DesignWidth="800">
+    <UserControl.Resources>
+        <Style x:Key="GenerateFileMenuItemStyle" TargetType="MenuItem">
+            <EventSetter Event="Click" Handler="GenerateNewFile_Click"/>
+        </Style>
+        <ContextMenu x:Key="GffFileContextMenu">
+            <MenuItem Header="Generate new file" Style="{StaticResource GenerateFileMenuItemStyle}"/>
+        </ContextMenu>
+    </UserControl.Resources>
     <DockPanel>
         <!-- Панель инструментов дерева -->
         <ToolBarTray DockPanel.Dock="Top">
@@ -24,6 +32,11 @@
                 <Style TargetType="TreeViewItem">
                     <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
                     <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding ItemType}" Value="GffFile">
+                            <Setter Property="ContextMenu" Value="{StaticResource GffFileContextMenu}"/>
+                        </DataTrigger>
+                    </Style.Triggers>
                 </Style>
             </TreeView.ItemContainerStyle>
 

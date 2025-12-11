@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -51,6 +52,59 @@ namespace DarkSunRE.ViewModels
         public ICommand CollapseAllCommand { get; }
         public ICommand RefreshCommand { get; }
         public ICommand DoubleClickCommand { get; }
+
+        public void GenerateNewFile(ProjectNode node)
+        {
+            if (node == null || node.ItemType != ProjectItemType.GffFile || CurrentProject == null)
+                return;
+
+            if (string.IsNullOrWhiteSpace(CurrentProject.ModifiedGamePath))
+            {
+                _statusService.ShowError("Modified Game Path is not configured.");
+                return;
+            }
+
+            if (node.Item is not ResourceFile file || file.Data == null)
+            {
+                _statusService.ShowError("Selected file is not loaded.");
+                return;
+            }
+
+            try
+            {
+                var gff = DSunTools.Common.Gff.GffFile.Create(file.Data);
+                var updatedBytes = file.Data;
+
+                if (file.Resources != null)
+                {
+                    foreach (var resource in file.Resources)
+                    {
+                        var doc = CurrentProject.OpenedDocuments.FirstOrDefault(d =>
+                            string.Equals(d.FileName, file.Name, StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(d.ResourceName, $"{resource.Tag}-{resource.Number}", StringComparison.OrdinalIgnoreCase));
+
+                        if (doc != null)
+                        {
+                            doc.ApplyStringChanges();
+                            updatedBytes = gff.ReplaceResource(resource.Tag, resource.Number, doc.newBytes);
+                            gff = DSunTools.Common.Gff.GffFile.Create(updatedBytes); // refresh tables for next replace
+                        }
+                    }
+                }
+
+                var outputPath = Path.Combine(CurrentProject.ModifiedGamePath, file.Name);
+                File.WriteAllBytes(outputPath, updatedBytes);
+
+                // refresh in-memory data for subsequent openings
+                file.Data = updatedBytes;
+
+                _statusService.ShowSuccess($"Generated file: {outputPath}");
+            }
+            catch (Exception ex)
+            {
+                _statusService.ShowError($"Failed to generate file: {ex.Message}", ex);
+            }
+        }
 
         private void LoadProjectTree()
         {

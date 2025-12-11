@@ -48,13 +48,38 @@ namespace DarkSunRE
 
             try
             {
-                // Parse GFF and extract resource bytes
-                var gff = GffFile.Create(container.Data);
-                var resourceBytes = gff.GetResourceData(resource.Tag, resource.Number);
+                // reuse existing opened document if present
+                var existingDoc = project.OpenedDocuments.FirstOrDefault(d =>
+                    string.Equals(d.FileName, container.Name, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(d.ResourceName, $"{resource.Tag}-{resource.Number}", StringComparison.OrdinalIgnoreCase));
 
-                string docName = $"{container.Name}:{resource.Tag}-{resource.Number}";
-                string resourceName = $"{resource.Tag}-{resource.Number}";
-                var document = new GPLDocument(resourceBytes, docName, container.FullPath, container.Name, resourceName);
+                GPLDocument document;
+                if (existingDoc != null)
+                {
+                    document = existingDoc;
+                }
+                else
+                {
+                    // prefer on-disk modified file if it exists
+                    byte[] gffBytes = container.Data;
+                    if (!string.IsNullOrWhiteSpace(project.ModifiedGamePath))
+                    {
+                        var modifiedPath = Path.Combine(project.ModifiedGamePath, container.Name);
+                        if (File.Exists(modifiedPath))
+                        {
+                            gffBytes = File.ReadAllBytes(modifiedPath);
+                        }
+                    }
+
+                    var gff = GffFile.Create(gffBytes);
+                    var resourceBytes = gff.GetResourceData(resource.Tag, resource.Number);
+
+                    string docName = $"{container.Name}:{resource.Tag}-{resource.Number}";
+                    string resourceName = $"{resource.Tag}-{resource.Number}";
+                    document = new GPLDocument(resourceBytes, docName, container.FullPath, container.Name, resourceName);
+                    project.OpenedDocuments.Add(document);
+                }
+
                 var documentViewModel = new GplDocumentViewModel(document);
                 var view = new GplDocumentView { DataContext = documentViewModel };
 

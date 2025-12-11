@@ -49,5 +49,15 @@ namespace DarkSunRE.Views
                 }
             }
         }
+
+        private void GenerateNewFile_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement element &&
+                element.DataContext is ProjectNode node &&
+                DataContext is ProjectTreeViewModel vm)
+            {
+                vm.GenerateNewFile(node);
+            }
+        }
     }
 }

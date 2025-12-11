@@ -6,24 +6,23 @@ using System.Text;
 using DarkSunRE.Models;
 
 namespace DarkSunRE.Models
-{
-    /// <summary>
-    /// Lightweight GPL document used by the editor UI.
-    /// Decodes GPL resource bytes into a list of <see cref="GPLString"/>,
-    /// keeps original bytes, and produces new bytes after edits.
-    /// </summary>
+{    
     public class GPLDocument
     {
         public string Name { get; }
         public string Path { get; set; }
+        public string FileName { get; }
+        public string ResourceName { get; }
         public byte[] originalBytes { get; }
         public byte[] newBytes { get; private set; }
         public List<GPLString> decodedStrings { get; set; } = new List<GPLString>();
 
-        public GPLDocument(byte[] resourceBytes, string name, string path = null)
+        public GPLDocument(byte[] resourceBytes, string name, string path = null, string fileName = null, string resourceName = null)
         {
             Name = name;
             Path = path ?? name;
+            FileName = fileName ?? name;
+            ResourceName = resourceName ?? name;
             originalBytes = resourceBytes ?? Array.Empty<byte>();
             newBytes = (byte[])originalBytes.Clone();
 

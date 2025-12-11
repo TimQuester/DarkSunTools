@@ -1,11 +1,9 @@
 ﻿using DarkSunRE.Models;
 using DarkSunRE.ViewModels;
+using DarkSunRE.Views;
 using Microsoft.Win32;
 using System.IO;
-using System.Text.Json;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
 using System.Windows.Input;
 using Xceed.Wpf.AvalonDock.Layout;
 using DSunTools.Common.Gff;
@@ -55,46 +53,43 @@ namespace DarkSunRE
                 var resourceBytes = gff.GetResourceData(resource.Tag, resource.Number);
 
                 string docName = $"{container.Name}:{resource.Tag}-{resource.Number}";
-                var Document = new GPLDocument(resourceBytes, docName, container.FullPath);
+                string resourceName = $"{resource.Tag}-{resource.Number}";
+                var document = new GPLDocument(resourceBytes, docName, container.FullPath, container.Name, resourceName);
+                var documentViewModel = new GplDocumentViewModel(document);
+                var view = new GplDocumentView { DataContext = documentViewModel };
 
-                LayoutDocument layoutDocument = new LayoutDocument();
-                layoutDocument.Title = Document.Name;
-                DataGrid dataGrid = new DataGrid();
-
-                dataGrid.AutoGenerateColumns = false;
-                dataGrid.CanUserAddRows = false;
-                dataGrid.CanUserDeleteRows = false;
-                dataGrid.CanUserReorderColumns = false;
-                dataGrid.CanUserSortColumns = false;
-
-                if (Resources["GrayedOutRowStyle"] is Style grayStyle)
+                LayoutDocument layoutDocument = new LayoutDocument
                 {
-                    dataGrid.RowStyle = grayStyle;
-                }
-
-                dataGrid.ItemsSource = Document.decodedStrings;
-                dataGrid.Columns.Add(new DataGridTextColumn() { Header = "#", Binding = new Binding(nameof(GPLString.StringNumber)) });
-                dataGrid.Columns.Add(new DataGridTextColumn() { Header = "Start", Binding = new Binding(nameof(GPLString.StartPosition)) });
-                dataGrid.Columns.Add(new DataGridTextColumn() { Header = "End", Binding = new Binding(nameof(GPLString.EndPosition)) });
-                var templateColumn = new DataGridTemplateColumn
-                {
-                    Header = "Strings",
-                    CellTemplate = (DataTemplate)FindResource("VerticalStringsTemplate")
+                    Title = documentViewModel.DisplayTitle,
+                    Content = view
                 };
-                dataGrid.Columns.Add(templateColumn);
-                dataGrid.Columns.Add(new DataGridCheckBoxColumn() { Header = "Real", Binding = new Binding(nameof(GPLString.RealString)) });
 
-                dataGrid.SelectedCellsChanged += DataGrid_SelectedCellsChanged;
+                documentViewModel.PropertyChanged += (o, args) =>
+                {
+                    if (args.PropertyName == nameof(GplDocumentViewModel.SelectedString) && documentViewModel.SelectedString != null)
+                    {
+                        hvp.SetPosition(documentViewModel.SelectedString.StartPosition, documentViewModel.SelectedString.EndPosition);
+                    }
+
+                    if (args.PropertyName == nameof(GplDocumentViewModel.NewBytes))
+                    {
+                        hvp.LoadBytes(documentViewModel.OriginalBytes, documentViewModel.NewBytes);
+                    }
+
+                    if (args.PropertyName == nameof(DocumentViewModel.DisplayTitle))
+                    {
+                        layoutDocument.Title = documentViewModel.DisplayTitle;
+                    }
+                };
 
                 // load into hex view
-                hvp.LoadBytes(Document.originalBytes, Document.newBytes);
+                hvp.LoadBytes(documentViewModel.OriginalBytes, documentViewModel.NewBytes);
 
-                layoutDocument.Content = dataGrid;
                 layoutDocumentPane.Children.Add(layoutDocument);
                 layoutDocument.IsActive = true;
 
                 // Add opened document to project list for later save/export operations
-                project.OpenedDocuments.Add(Document);
+                project.OpenedDocuments.Add(document);
             }
             catch (Exception ex)
             {
@@ -112,93 +107,78 @@ namespace DarkSunRE
             }
         }
 
-        private void DataGrid_SelectedCellsChanged(object sender, SelectedCellsChangedEventArgs e)
-        {
-            var str = (GPLString)((DataGrid)sender).SelectedItem;
-            if (str?.StartPosition == null)
-                return;
-            hvp.SetPosition(str.StartPosition, str.EndPosition);
-            ((DataGrid)sender).Focus();
-        }
-
         private void UpdateGPL_Click(object sender, RoutedEventArgs e)
         {
-            if (layoutDocumentPane.SelectedContent != null)
-            {
-                var doc = FindOpenedDocumentByLayoutTitle(((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
-                if (doc != null)
-                {
-                    doc.ApplyStringChanges();
-                    hvp.LoadBytes(doc.originalBytes, doc.newBytes);
-                }
-            }
+            var vm = GetActiveGplDocumentViewModel();
+            if (vm == null) return;
+
+            vm.ApplyStringChanges();
+            hvp.LoadBytes(vm.OriginalBytes, vm.NewBytes);
         }
 
         private void SaveNewGPL_Click(object sender, RoutedEventArgs e)
         {
-            if (layoutDocumentPane.SelectedContent != null)
-            {
-                var doc = FindOpenedDocumentByLayoutTitle(((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
-                if (doc != null)
-                {
-                    string newFilePath = $"{doc.Path}_modified";
-                    File.WriteAllBytes(newFilePath, doc.newBytes);
-                }
-            }
+            var vm = GetActiveGplDocumentViewModel();
+            if (vm == null) return;
+
+            vm.ApplyStringChanges();
+            vm.SaveModifiedFile();
+            hvp.LoadBytes(vm.OriginalBytes, vm.NewBytes);
         }
 
         private void SaveJSONGPL_Click(object sender, RoutedEventArgs e)
         {
-            var doc = FindOpenedDocumentByLayoutTitle(((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
-            if (doc == null) return;
+            var docVm = GetActiveGplDocumentViewModel();
+            if (docVm == null) return;
 
-            if (DataContext is MainViewModel vm && vm.CurrentProject.JsonFolderPath != null)
+            if (DataContext is MainViewModel vm && !string.IsNullOrWhiteSpace(vm.CurrentProject?.JsonFolderPath))
             {
-                using (FileStream fs = new FileStream($"{vm.CurrentProject.JsonFolderPath}\\{doc.Name.Replace(':', '-')}.json", FileMode.Create))
-                {
-                    JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions()
-                    { WriteIndented = true };
-                    JsonSerializer.Serialize<List<GPLString>>(fs, doc.decodedStrings, jsonSerializerOptions);
-                }
+                docVm.SaveJson(vm.CurrentProject.JsonFolderPath);
+            }
+            else
+            {
+                MessageBox.Show("JSON folder path is not configured for the current project.");
             }
         }
 
         private void LoadJSONGPL_Click(object sender, RoutedEventArgs e)
         {
-            var doc = FindOpenedDocumentByLayoutTitle(((LayoutDocument)layoutDocumentPane.SelectedContent).Title);
-            if (doc == null) return;
+            var docVm = GetActiveGplDocumentViewModel();
+            if (docVm == null) return;
 
-            var filename = $"{doc.Path}.json";
+            var jsonFolder = (DataContext as MainViewModel)?.CurrentProject?.JsonFolderPath;
+            if (string.IsNullOrWhiteSpace(jsonFolder))
+            {
+                MessageBox.Show("JSON folder path is not configured for the current project.");
+                return;
+            }
+
+            var filename = Path.Combine(jsonFolder, $"{docVm.FileName}_{docVm.ResourceName}.json");
             if (!File.Exists(filename))
             {
                 MessageBox.Show($"Файл {filename} отсутствует");
                 return;
             }
-            using (FileStream fs = new FileStream(filename, FileMode.Open))
+
+            try
             {
-                var decodedStrings = JsonSerializer.Deserialize<List<GPLString>>(fs);
-                if (decodedStrings != null)
-                {
-                    doc.decodedStrings = decodedStrings;
-                    var layoutDocument = (LayoutDocument)layoutDocumentPane.SelectedContent;
-                    ((DataGrid)layoutDocument.Content).ItemsSource = doc.decodedStrings;
-                    doc.RefreshNewBytesAfterLoadJson();
-                }
-                else
-                {
-                    MessageBox.Show("Загрузка данных не удалась.");
-                    return;
-                }
+                docVm.LoadJson(filename);
+                hvp.LoadBytes(docVm.OriginalBytes, docVm.NewBytes);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Загрузка данных не удалась: {ex.Message}");
             }
         }
 
-        private GPLDocument FindOpenedDocumentByLayoutTitle(string title)
+        private GplDocumentViewModel GetActiveGplDocumentViewModel()
         {
-            // assume main VM is DataContext and has CurrentProject
-            if (DataContext is MainViewModel vm && vm.CurrentProject != null)
+            if (layoutDocumentPane.SelectedContent is LayoutDocument layoutDocument &&
+                layoutDocument.Content is FrameworkElement element)
             {
-                return vm.CurrentProject.OpenedDocuments.FirstOrDefault(d => d.Name == title);
+                return element.DataContext as GplDocumentViewModel;
             }
+
             return null;
         }
 

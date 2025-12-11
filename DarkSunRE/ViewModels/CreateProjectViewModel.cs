@@ -22,6 +22,7 @@ namespace DarkSunRE.ViewModels
         private string _originalGamePath;
         private string _modifiedGamePath;
         private string _jsonFolderPath;
+        private string _autoJsonFolderPath;
 
         public event EventHandler<ProjectCreatedEventArgs>? ProjectCreated;
 
@@ -149,10 +150,13 @@ namespace DarkSunRE.ViewModels
                 "Projects",
                 ProjectName);
 
-            if (string.IsNullOrEmpty(JsonFolderPath))
+            var newAutoJson = Path.Combine(ModifiedGamePath, "json");
+            if (string.IsNullOrEmpty(JsonFolderPath) ||
+                string.Equals(JsonFolderPath, _autoJsonFolderPath, StringComparison.OrdinalIgnoreCase))
             {
-                JsonFolderPath = Path.Combine(ModifiedGamePath, "json");
+                JsonFolderPath = newAutoJson;
             }
+            _autoJsonFolderPath = newAutoJson;
         }
 
         protected override bool CanOk() =>
@@ -176,20 +180,6 @@ namespace DarkSunRE.ViewModels
             {
                 _statusService.ShowError("Original game path does not exist");
                 return false;
-            }
-
-            // ensure json folder exists or can be created
-            if (!string.IsNullOrEmpty(JsonFolderPath) && !_fileService.DirectoryExists(JsonFolderPath))
-            {
-                try
-                {
-                    _fileService.CreateDirectory(JsonFolderPath);
-                }
-                catch (Exception ex)
-                {
-                    _statusService.ShowError($"Unable to create JSON folder: {ex.Message}", ex);
-                    return false;
-                }
             }
 
             return true;

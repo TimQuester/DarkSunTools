@@ -17,7 +17,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 
-namespace DarkSunRE.Controls
+namespace DarkSunRE.Views
 {
     /// <summary>
     /// Interaction logic for HexViewsPane.xaml

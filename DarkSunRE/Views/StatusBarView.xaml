@@ -1,0 +1,52 @@
+﻿<UserControl x:Class="DarkSunRE.Views.StatusBarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:DarkSunRE.Converters">
+
+    <UserControl.Resources>
+        <conv:StatusMessageTypeToBrushConverter x:Key="StatusColorConverter"/>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        <conv:ProgressVisibilityConverter x:Key="ProgressVisibilityConverter"/>
+    </UserControl.Resources>
+
+    <Border Background="{Binding MessageType, Converter={StaticResource StatusColorConverter}}"
+            Padding="6">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       Text="{Binding Message}"
+                       FontSize="13"
+                       FontWeight="SemiBold"
+                       Foreground="White"
+                       VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis"
+                       Margin="6,0,12,0"/>
+
+            <StackPanel Grid.Column="1" Orientation="Vertical" HorizontalAlignment="Right" Margin="0,0,12,0">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Project: " FontSize="11" Foreground="White" Opacity="0.9" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding ProjectPath}" FontSize="11" Foreground="White" TextTrimming="CharacterEllipsis" MaxWidth="360"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                    <TextBlock Text="JSONs: " FontSize="11" Foreground="White" Opacity="0.9" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding JsonFolder}" FontSize="11" Foreground="White" TextTrimming="CharacterEllipsis" MaxWidth="360"/>
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,6,0">
+                <ProgressBar Value="{Binding Progress, Mode=OneWay}"
+                             Maximum="100"
+                             IsIndeterminate="{Binding IsIndeterminate}"
+                             Width="120" Height="16" Margin="8,0"
+                             Visibility="{Binding MessageType, Converter={StaticResource ProgressVisibilityConverter}}"/>
+                <Button Content="✕" Command="{Binding ClearCommand}" ToolTip="Clear / show last outcome" Width="26" Height="20" Margin="12,0,4,0"/>
+                <Button Content="📋" Command="{Binding ShowHistoryCommand}" ToolTip="Show message history" Width="26" Height="20" Margin="4,0"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

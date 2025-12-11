@@ -1,4 +1,5 @@
-﻿using System;
+﻿using DSunTools.Common.Gff;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,5 +13,8 @@ namespace DarkSunRE.Models
         public string Name;
         public string FullPath;
         public byte[] Data;
+        public bool IsModified { get; set; }
+        public List<ResourceInfo> Resources { get; set; }
     }
+        
 }

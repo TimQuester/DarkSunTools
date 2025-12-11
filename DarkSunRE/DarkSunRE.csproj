@@ -7,15 +7,24 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <LangVersion>preview</LangVersion>
+    <ApplicationIcon>Resources\DSRE.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="Resources\DSRE.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Extended.Wpf.Toolkit" Version="4.7.25104.5739" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
     <PackageReference Include="WPFHexaEditor" Version="2.1.7" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Views\" />
+    <ProjectReference Include="..\Common\Common.csproj" />
   </ItemGroup>
 
 </Project>

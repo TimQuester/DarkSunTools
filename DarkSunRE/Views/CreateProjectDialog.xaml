@@ -1,0 +1,96 @@
+﻿<Window x:Class="DarkSunRE.Views.CreateProjectDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:DarkSunRE.Views"
+        xmlns:viewModels="clr-namespace:DarkSunRE.ViewModels"
+        mc:Ignorable="d"
+        Title="New project" Height="500" Width="600"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        d:DataContext="{d:DesignInstance viewModels:CreateProjectViewModel}">
+
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="MinWidth" Value="80"/>
+        </Style>
+
+        <Style TargetType="TextBlock">
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Game Selection -->
+        <TextBlock Text="Game:" Grid.Row="0" FontWeight="Bold"/>
+        <ComboBox Grid.Row="1" ItemsSource="{Binding AvailableGames}" 
+                 SelectedItem="{Binding SelectedGame}" DisplayMemberPath="Name"
+                 Margin="5"/>
+
+        <!-- Project Name -->
+        <TextBlock Text="Project Name:" Grid.Row="2" FontWeight="Bold" Margin="0,10,0,0"/>
+        <TextBox Grid.Row="3" Text="{Binding ProjectName, UpdateSourceTrigger=PropertyChanged}"
+                 Margin="5"/>
+
+        <!-- Original Game Path -->
+        <TextBlock Text="Original Game Path:" Grid.Row="4" FontWeight="Bold" Margin="0,10,0,0"/>
+        <Grid Grid.Row="5">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox Text="{Binding OriginalGamePath}" IsReadOnly="True" Margin="5"/>
+            <Button Grid.Column="1" Content="Browse..." Command="{Binding BrowseOriginalGameCommand}"
+                    Margin="5"/>
+        </Grid>
+
+        <!-- Modified Game Path -->
+        <TextBlock Text="Modified Game Path:" Grid.Row="6" FontWeight="Bold" Margin="0,10,0,0"/>
+        <Grid Grid.Row="7">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox Text="{Binding ModifiedGamePath}" IsReadOnly="True" Margin="5"/>
+            <Button Grid.Column="1" Content="Browse..." Command="{Binding BrowseModifiedGameCommand}"
+                    Margin="5"/>
+        </Grid>
+
+        <!-- JSON Folder Path -->
+        <TextBlock Text="JSON Folder Path:" Grid.Row="8" FontWeight="Bold" Margin="0,10,0,0"/>
+        <Grid Grid.Row="9">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox Text="{Binding JsonFolderPath}" IsReadOnly="True" Margin="5"/>
+            <Button Grid.Column="1" Content="Browse..." Command="{Binding BrowseJsonFolderCommand}"
+                    Margin="5"/>
+        </Grid>
+
+        <StackPanel Grid.Row="10" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20">
+            <Button Content="Create" Command="{Binding CreateCommand}" 
+                    IsDefault="True" Style="{StaticResource AccentButtonStyle}"/>
+            <Button Content="Cancel" Command="{Binding CancelCommand}" 
+                    IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -6,10 +6,9 @@
         xmlns:local="clr-namespace:DarkSunRE"
         xmlns:models="clr-namespace:DarkSunRE.Models"
         xmlns:avalondock="http://schemas.xceed.com/wpf/xaml/avalondock"
-        xmlns:hexview="clr-namespace:WpfHexaEditor;assembly=WPFHexaEditor"        
-        xmlns:controls="clr-namespace:DarkSunRE.Controls"
+        xmlns:views="clr-namespace:DarkSunRE.Views"
         mc:Ignorable="d"
-        Title="MainWindow" Width="1200" Height="1024">
+        Title="Dark Sun Tools" Width="1200" Height="1024">
     <Window.Resources>
         <DataTemplate x:Key="VerticalStringsTemplate">
             <StackPanel Orientation="Vertical">
@@ -27,64 +26,73 @@
             </StackPanel>
         </DataTemplate>
         <Style x:Key="GrayedOutRowStyle" TargetType="DataGridRow" x:Name="GrayedOutRowStyle">
-                <Style.Triggers>
-                    <DataTrigger Binding="{Binding RealString}" Value="False">
-                        <Setter Property="Foreground" Value="Gray"/>
-                        <Setter Property="Opacity" Value="0.7"/>
-                        <Setter Property="Background" Value="#FFF0F0F0"/>
-                    </DataTrigger>
-                </Style.Triggers>
-            </Style>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding RealString}" Value="False">
+                    <Setter Property="Foreground" Value="Gray"/>
+                    <Setter Property="Opacity" Value="0.7"/>
+                    <Setter Property="Background" Value="#FFF0F0F0"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
+    <Window.CommandBindings>
+        <CommandBinding Command="New" Executed="NewCommand_Executed"/>
+        <CommandBinding Command="Open" Executed="OpenCommand_Executed"/>
+        <CommandBinding Command="Save" Executed="SaveCommand_Executed"/>
+        <CommandBinding Command="Properties" Executed="SettingsCommand_Executed"/>
+    </Window.CommandBindings>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="20"/>
+            <RowDefinition Height="50"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="150"/>
-            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="150"/>
         </Grid.ColumnDefinitions>
         <StackPanel Grid.Row="0" Grid.ColumnSpan="3">
             <Menu>
-                <MenuItem Header="File">
-                    <MenuItem Header="Open folder" Click="MenuItem_Click"/>
+                <MenuItem Header="_File">
+                <MenuItem Header="_New Project" Command="New" InputGestureText="Ctrl+N"/>
+                    <MenuItem Header="_Open Project" Command="Open" InputGestureText="Ctrl+O"/>
+                    <MenuItem Header="_Save Project" Command="Save" InputGestureText="Ctrl+S"/>
+                    <MenuItem Header="Project Settings" Command="Properties"/>
+                    <Separator/>
+                    <MenuItem Header="E_xit" Command="{Binding ExitCommand}"/>
                 </MenuItem>
             </Menu>
             <ToolBar>
-                <Button Click="MenuItem_Click" BorderBrush="Black" BorderThickness ="1">Open folder</Button>
-                <Button Click="UpdateGPL_Click" BorderBrush="Black" BorderThickness="1" HorizontalAlignment="Left">Update GPL</Button>
-                <Button Click="SaveNewGPL_Click" BorderBrush="Black" BorderThickness="1" Content="Save new GPL"/>
+                <Button Command="New" ToolTip="New Project (Ctrl+N)">New Project</Button>
+                <Button Command="Open" ToolTip="Open Project (Ctrl+O)">Open Project</Button>
+                <Button Command="Save" ToolTip="Save Project (Ctrl+S)">Save Project</Button>
+                <Button Command="Properties" ToolTip="Project settings">Settings</Button>
                 <Button Click="SaveJSONGPL_Click" BorderBrush="Black" BorderThickness="1" Content="Save JSON GPL"/>
                 <Button Click="LoadJSONGPL_Click" BorderBrush="Black" BorderThickness="1" Content="Load JSON GPL"/>
             </ToolBar>
         </StackPanel>
-        <avalondock:DockingManager Grid.Row="1" Grid.ColumnSpan="3">
+        <avalondock:DockingManager Grid.Row="1" Grid.ColumnSpan="3" Margin="0,0,0,10">
             <avalondock:LayoutRoot>
                 <avalondock:LayoutPanel Orientation="Horizontal">
                     <avalondock:LayoutAnchorablePane>
                         <avalondock:LayoutAnchorable Title="Files">
-                            <TreeView x:Name="FileTree" Width="auto">
-                                <TreeView.ItemContainerStyle>
-                                    <Style TargetType="TreeViewItem">
-                                        <EventSetter Event="MouseDoubleClick" Handler="TreeViewItem_MouseDoubleClick"/>
-                                    </Style>
-                                </TreeView.ItemContainerStyle>
-                            </TreeView>
+                            <views:ProjectTreeView DataContext="{Binding ProjectTree}"
+                                   Grid.Column="0"/>
                         </avalondock:LayoutAnchorable>
                     </avalondock:LayoutAnchorablePane>
                     <avalondock:LayoutPanel Orientation="Vertical">
                         <avalondock:LayoutDocumentPane x:Name="layoutDocumentPane"/>
                         <avalondock:LayoutAnchorablePane>
                             <avalondock:LayoutAnchorable Title="Hex View">
-                                <controls:HexViewsPane x:Name="hvp"/>
+                                <views:HexViewsPane x:Name="hvp"/>
                             </avalondock:LayoutAnchorable>
                         </avalondock:LayoutAnchorablePane>
                     </avalondock:LayoutPanel>
                 </avalondock:LayoutPanel>
             </avalondock:LayoutRoot>
         </avalondock:DockingManager>
+        <views:StatusBarView Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" />
     </Grid>
 </Window>

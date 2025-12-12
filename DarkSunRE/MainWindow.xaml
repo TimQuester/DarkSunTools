@@ -70,7 +70,7 @@
                 <Button Command="Save" BorderBrush="DarkGray" ToolTip="Save Project (Ctrl+S)" BorderThickness="1" >Save Project</Button>
                 <Button Command="Properties" BorderBrush="DarkGray" ToolTip="Project settings" BorderThickness="1" >Settings</Button>
                 <Button Click="SaveJSONGPL_Click" BorderBrush="DarkGray" BorderThickness="1">Save JSON GPL</Button>
-                <Button Click="LoadJSONGPL_Click" BorderBrush="DarkGray" BorderThickness="1">Load JSON GPL"</Button>
+                <Button Click="LoadJSONGPL_Click" BorderBrush="DarkGray" BorderThickness="1">Load JSON GPL</Button>
             </ToolBar>
         </StackPanel>
         <avalondock:DockingManager Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3">

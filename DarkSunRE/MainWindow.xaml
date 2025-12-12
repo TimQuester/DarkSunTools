@@ -8,7 +8,7 @@
         xmlns:avalondock="http://schemas.xceed.com/wpf/xaml/avalondock"
         xmlns:views="clr-namespace:DarkSunRE.Views"
         mc:Ignorable="d"
-        Title="Dark Sun Tools" Width="1200" Height="1024">
+        Title="Dark Sun Tools" Height="1024" Width="1300">
     <Window.Resources>
         <DataTemplate x:Key="VerticalStringsTemplate">
             <StackPanel Orientation="Vertical">
@@ -46,17 +46,17 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="50"/>
+            <RowDefinition Height="auto"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="150"/>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="150"/>
+            <ColumnDefinition Width="auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="auto"/>
         </Grid.ColumnDefinitions>
         <StackPanel Grid.Row="0" Grid.ColumnSpan="3">
             <Menu>
                 <MenuItem Header="_File">
-                <MenuItem Header="_New Project" Command="New" InputGestureText="Ctrl+N"/>
+                    <MenuItem Header="_New Project" Command="New" InputGestureText="Ctrl+N"/>
                     <MenuItem Header="_Open Project" Command="Open" InputGestureText="Ctrl+O"/>
                     <MenuItem Header="_Save Project" Command="Save" InputGestureText="Ctrl+S"/>
                     <MenuItem Header="Project Settings" Command="Properties"/>
@@ -65,34 +65,33 @@
                 </MenuItem>
             </Menu>
             <ToolBar>
-                <Button Command="New" ToolTip="New Project (Ctrl+N)">New Project</Button>
-                <Button Command="Open" ToolTip="Open Project (Ctrl+O)">Open Project</Button>
-                <Button Command="Save" ToolTip="Save Project (Ctrl+S)">Save Project</Button>
-                <Button Command="Properties" ToolTip="Project settings">Settings</Button>
-                <Button Click="SaveJSONGPL_Click" BorderBrush="Black" BorderThickness="1" Content="Save JSON GPL"/>
-                <Button Click="LoadJSONGPL_Click" BorderBrush="Black" BorderThickness="1" Content="Load JSON GPL"/>
+                <Button Command="New" BorderBrush="DarkGray" ToolTip="New Project (Ctrl+N)" BorderThickness="1" >New Project</Button>
+                <Button Command="Open" BorderBrush="DarkGray" ToolTip="Open Project (Ctrl+O)" BorderThickness="1" >Open Project</Button>
+                <Button Command="Save" BorderBrush="DarkGray" ToolTip="Save Project (Ctrl+S)" BorderThickness="1" >Save Project</Button>
+                <Button Command="Properties" BorderBrush="DarkGray" ToolTip="Project settings" BorderThickness="1" >Settings</Button>
+                <Button Click="SaveJSONGPL_Click" BorderBrush="DarkGray" BorderThickness="1">Save JSON GPL</Button>
+                <Button Click="LoadJSONGPL_Click" BorderBrush="DarkGray" BorderThickness="1">Load JSON GPL"</Button>
             </ToolBar>
         </StackPanel>
-        <avalondock:DockingManager Grid.Row="1" Grid.ColumnSpan="3" Margin="0,0,0,10">
+        <avalondock:DockingManager Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3">
             <avalondock:LayoutRoot>
                 <avalondock:LayoutPanel Orientation="Horizontal">
-                    <avalondock:LayoutAnchorablePane>
+                    <avalondock:LayoutAnchorablePane DockWidth="250">
                         <avalondock:LayoutAnchorable Title="Files">
-                            <views:ProjectTreeView DataContext="{Binding ProjectTree}"
-                                   Grid.Column="0"/>
+                            <views:ProjectTreeView DataContext="{Binding ProjectTree}"/>
                         </avalondock:LayoutAnchorable>
                     </avalondock:LayoutAnchorablePane>
                     <avalondock:LayoutPanel Orientation="Vertical">
                         <avalondock:LayoutDocumentPane x:Name="layoutDocumentPane"/>
                         <avalondock:LayoutAnchorablePane>
                             <avalondock:LayoutAnchorable Title="Hex View">
-                                <views:HexViewsPane x:Name="hvp"/>
+                                <views:HexViewsPane x:Name="hvp" Width="Auto"/>
                             </avalondock:LayoutAnchorable>
                         </avalondock:LayoutAnchorablePane>
                     </avalondock:LayoutPanel>
                 </avalondock:LayoutPanel>
             </avalondock:LayoutRoot>
         </avalondock:DockingManager>
-        <views:StatusBarView Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" />
+        <views:StatusBarView Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" HorizontalAlignment="Stretch" Margin="0,0,0,0"/>
     </Grid>
 </Window>

@@ -8,19 +8,29 @@
              d:DesignWidth="800">
     <UserControl.Resources>
         <DataTemplate x:Key="VerticalStringsTemplate">
-            <StackPanel Orientation="Vertical">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="{Binding OriginalString}" FontWeight="Bold" />
-                    <TextBlock Text="{Binding OriginalSize}" Padding="2" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal">
-                    <TextBox Text="{Binding NewString, UpdateSourceTrigger=PropertyChanged}"
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition/>
+                    <RowDefinition/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding OriginalString}"
+                             Grid.Column="0" Grid.Row="0"
+                             FontWeight="Bold"
+                             TextWrapping="WrapWithOverflow"
+                             MaxWidth="600"/>
+                <TextBlock Text="{Binding OriginalSize}" Padding="2" Grid.Column="1" Grid.Row="0"/>
+                <TextBox Text="{Binding NewString, UpdateSourceTrigger=PropertyChanged}"
+                             Grid.Column="0" Grid.Row="1"
                              Background="Transparent"
                              BorderThickness="1"
-                             Padding="2,0" />
-                    <TextBlock Text="{Binding NewSize, UpdateSourceTrigger=PropertyChanged}" Padding="2" />
-                </StackPanel>
-            </StackPanel>
+                             Padding="2,0" TextWrapping="WrapWithOverflow"
+                             MaxWidth="600"/>
+                <TextBlock Text="{Binding NewSize, UpdateSourceTrigger=PropertyChanged}" Padding="2" Grid.Column="1" Grid.Row="1"/>
+            </Grid>
         </DataTemplate>
         <Style x:Key="GrayedOutRowStyle" TargetType="DataGridRow">
             <Style.Triggers>
@@ -46,10 +56,8 @@
             <DataGridTextColumn Header="#" Binding="{Binding StringNumber}" />
             <DataGridTextColumn Header="Start" Binding="{Binding StartPosition}" />
             <DataGridTextColumn Header="End" Binding="{Binding EndPosition}" />
-            <DataGridTemplateColumn Header="Strings" CellTemplate="{StaticResource VerticalStringsTemplate}" />
+            <DataGridTemplateColumn Header="Strings" CellTemplate="{StaticResource VerticalStringsTemplate}" Width="630"/>
             <DataGridCheckBoxColumn Header="Real" Binding="{Binding RealString}" />
         </DataGrid.Columns>
     </DataGrid>
 </UserControl>
-
-

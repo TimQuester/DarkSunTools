@@ -5,9 +5,15 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:hexview="clr-namespace:WpfHexaEditor;assembly=WPFHexaEditor"
              mc:Ignorable="d" 
-             d:DesignHeight="450" d:DesignWidth="1200">
-    <StackPanel Orientation="Horizontal">
-        <hexview:HexEditor x:Name="hexViewer1" ReadOnlyMode="True" Width="600"/>
-        <hexview:HexEditor x:Name="hexViewer2" ReadOnlyMode="True" Width="600"/>
-    </StackPanel>
+             d:DesignHeight="250" d:DesignWidth="1200">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="50*"/>
+            <ColumnDefinition Width="50*"/>
+        </Grid.ColumnDefinitions>
+        <hexview:HexEditor x:Name="hexViewer1" ReadOnlyMode="True" Grid.Column="0"/>
+        <hexview:HexEditor x:Name="hexViewer2" ReadOnlyMode="True" Grid.Column="1"/>
+    </Grid>
 </UserControl>
+
+    

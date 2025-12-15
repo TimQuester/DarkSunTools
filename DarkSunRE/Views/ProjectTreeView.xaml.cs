@@ -38,14 +38,13 @@ namespace DarkSunRE.Views
 
         private void TreeView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            if (e.OriginalSource is FrameworkElement source &&
-                source.DataContext is ProjectNode node &&
-                node.ItemType == ProjectItemType.Resource)
+            if (DataContext is ProjectTreeViewModel vm &&
+                e.OriginalSource is FrameworkElement source &&
+                source.DataContext is ProjectNode node)
             {
-                // Открываем ресурс при двойном клике
-                if (DataContext is ProjectTreeViewModel vm)
+                if (vm.NodeDoubleClickedCommand.CanExecute(node))
                 {
-                    vm.OpenResource(node.Tag, node.ResourceNumber);
+                    vm.NodeDoubleClickedCommand.Execute(node);
                 }
             }
         }

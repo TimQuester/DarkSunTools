@@ -21,6 +21,9 @@ namespace DarkSunRE.ViewModels
         private readonly IStatusService _statusService;
         private Project _currentProject;
 
+        public ICommand NodeDoubleClickedCommand { get; }
+        public ICommand GenerateNewFileCommand { get; }
+
         public ProjectTreeViewModel(IProjectService projectService, IStatusService statusService)
         {
             _projectService = projectService;
@@ -32,6 +35,9 @@ namespace DarkSunRE.ViewModels
             ExpandAllCommand = new RelayCommand(ExpandAll);
             CollapseAllCommand = new RelayCommand(CollapseAll);
             RefreshCommand = new RelayCommand(RefreshTree);
+
+            NodeDoubleClickedCommand = new RelayCommand<ProjectNode>(OnNodeDoubleClicked);
+            GenerateNewFileCommand = new RelayCommand<ProjectNode>(GenerateNewFile);
         }
 
         public Project CurrentProject
@@ -52,6 +58,7 @@ namespace DarkSunRE.ViewModels
         public ICommand CollapseAllCommand { get; }
         public ICommand RefreshCommand { get; }
         public ICommand DoubleClickCommand { get; }
+        public Func<bool> CanGenerateNewFile { get; private set; }
 
         public void SaveAllJsons(ProjectNode node)
         {
@@ -291,6 +298,14 @@ namespace DarkSunRE.ViewModels
                 }
             }
             return null;
+        }
+
+        private void OnNodeDoubleClicked(ProjectNode node)
+        {
+            if (node?.ItemType == ProjectItemType.Resource)
+            {
+                OpenResource(node.Tag, node.ResourceNumber);
+            }
         }
 
         public event EventHandler<ResourceEventArgs> ResourceOpened;

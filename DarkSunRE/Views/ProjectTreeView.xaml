@@ -17,10 +17,16 @@
             <EventSetter Event="Click" Handler="LoadAllJsons_Click"/>
         </Style>
         <ContextMenu x:Key="GffFileContextMenu">
-            <MenuItem Header="Generate new file" Style="{StaticResource GenerateFileMenuItemStyle}"/>
+            <MenuItem Header="Generate new file" Style="{StaticResource GenerateFileMenuItemStyle}"
+                      Command="{Binding DataContext.GenerateNewFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+              CommandParameter="{Binding}"/>
             <Separator/>
-            <MenuItem Header="Save all JSONs" Style="{StaticResource SaveAllJsonsMenuItemStyle}"/>
-            <MenuItem Header="Load all JSONs" Style="{StaticResource LoadAllJsonsMenuItemStyle}"/>
+            <MenuItem Header="Save all JSONs" Style="{StaticResource SaveAllJsonsMenuItemStyle}"
+                    Command="{Binding DataContext.SaveAllJsonsCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                    CommandParameter="{Binding}"/>
+            <MenuItem Header="Load all JSONs" Style="{StaticResource LoadAllJsonsMenuItemStyle}"
+                    Command="{Binding DataContext.LoadAllJsonsCommand, RelativeSource={RelativeSource AncestorType=Control}}" 
+                    CommandParameter="{Binding}"/>
         </ContextMenu>
     </UserControl.Resources>
     <DockPanel>

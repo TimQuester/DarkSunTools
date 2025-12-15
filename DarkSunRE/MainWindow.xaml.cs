@@ -15,12 +15,21 @@ namespace DarkSunRE
     /// </summary>
     public partial class MainWindow : Window
     {
+
         public MainWindow()
         {
             InitializeComponent();
             SetupInputBindings();
 
             Loaded += MainWindow_Loaded;
+
+            var viewModel = (MainViewModel)DataContext;
+
+            // Подписываемся на событие изменения активного документа
+            dockManager.ActiveContentChanged += OnActiveContentChanged;
+
+            // Инициализируем активный документ
+            UpdateActiveGplDocument();
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -29,6 +38,7 @@ namespace DarkSunRE
             {
                 vm.ProjectTree.ResourceOpened += ProjectTree_ResourceOpened;
             }
+            UpdateActiveGplDocument();
         }
 
         private void ProjectTree_ResourceOpened(object? sender, ResourceEventArgs e)
@@ -114,8 +124,7 @@ namespace DarkSunRE
                 layoutDocumentPane.Children.Add(layoutDocument);
                 layoutDocument.IsActive = true;
 
-                // Add opened document to project list for later save/export operations
-                project.OpenedDocuments.Add(document);
+                UpdateActiveGplDocument();
             }
             catch (Exception ex)
             {
@@ -128,78 +137,13 @@ namespace DarkSunRE
             var openFolderDialog = new OpenFolderDialog();
             if (openFolderDialog.ShowDialog() == true)
             {
-                // legacy behaviour - not used for project model
-                // Project = new Project(openFolderDialog.FolderName);
+                ;
             }
         }
 
-        private void UpdateGPL_Click(object sender, RoutedEventArgs e)
+        public GplDocumentViewModel GetActiveGplDocumentViewModel()
         {
-            var vm = GetActiveGplDocumentViewModel();
-            if (vm == null) return;
-
-            vm.ApplyStringChanges();
-            hvp.LoadBytes(vm.OriginalBytes, vm.NewBytes);
-        }
-
-        private void SaveNewGPL_Click(object sender, RoutedEventArgs e)
-        {
-            var vm = GetActiveGplDocumentViewModel();
-            if (vm == null) return;
-
-            vm.ApplyStringChanges();
-            vm.SaveModifiedFile();
-            hvp.LoadBytes(vm.OriginalBytes, vm.NewBytes);
-        }
-
-        private void SaveJSONGPL_Click(object sender, RoutedEventArgs e)
-        {
-            var docVm = GetActiveGplDocumentViewModel();
-            if (docVm == null) return;
-
-            if (DataContext is MainViewModel vm && !string.IsNullOrWhiteSpace(vm.CurrentProject?.JsonFolderPath))
-            {
-                docVm.SaveJson(vm.CurrentProject.JsonFolderPath);
-            }
-            else
-            {
-                MessageBox.Show("JSON folder path is not configured for the current project.");
-            }
-        }
-
-        private void LoadJSONGPL_Click(object sender, RoutedEventArgs e)
-        {
-            var docVm = GetActiveGplDocumentViewModel();
-            if (docVm == null) return;
-
-            var jsonFolder = (DataContext as MainViewModel)?.CurrentProject?.JsonFolderPath;
-            if (string.IsNullOrWhiteSpace(jsonFolder))
-            {
-                MessageBox.Show("JSON folder path is not configured for the current project.");
-                return;
-            }
-
-            var filename = Path.Combine(jsonFolder, $"{docVm.FileName}_{docVm.ResourceName}.json");
-            if (!File.Exists(filename))
-            {
-                MessageBox.Show($"Файл {filename} отсутствует");
-                return;
-            }
-
-            try
-            {
-                docVm.LoadJson(filename);
-                hvp.LoadBytes(docVm.OriginalBytes, docVm.NewBytes);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Загрузка данных не удалась: {ex.Message}");
-            }
-        }
-
-        private GplDocumentViewModel GetActiveGplDocumentViewModel()
-        {
-            if (layoutDocumentPane.SelectedContent is LayoutDocument layoutDocument &&
+            if (layoutDocumentPane?.SelectedContent is LayoutDocument layoutDocument &&
                 layoutDocument.Content is FrameworkElement element)
             {
                 return element.DataContext as GplDocumentViewModel;
@@ -249,6 +193,27 @@ namespace DarkSunRE
             if (DataContext is MainViewModel vm && vm.SettingsCommand.CanExecute(null))
             {
                 vm.SettingsCommand.Execute(null);
+            }
+        }
+        private void OnActiveContentChanged(object sender, EventArgs e)
+        {
+            UpdateActiveGplDocument();            
+            CommandManager.InvalidateRequerySuggested();
+        }
+
+        private void UpdateActiveGplDocument()
+        {
+            try
+            {
+                var activeDoc = GetActiveGplDocumentViewModel();
+                if (DataContext is MainViewModel viewModel)
+                {
+                    viewModel.ActiveGplDocument = activeDoc;
+                }
+            }
+            catch (Exception ex)
+            {                
+                System.Diagnostics.Debug.WriteLine($"Error updating active document: {ex.Message}");
             }
         }
     }

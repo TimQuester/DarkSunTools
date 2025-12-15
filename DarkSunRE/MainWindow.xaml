@@ -69,11 +69,11 @@
                 <Button Command="Open" BorderBrush="DarkGray" ToolTip="Open Project (Ctrl+O)" BorderThickness="1" >Open Project</Button>
                 <Button Command="Save" BorderBrush="DarkGray" ToolTip="Save Project (Ctrl+S)" BorderThickness="1" >Save Project</Button>
                 <Button Command="Properties" BorderBrush="DarkGray" ToolTip="Project settings" BorderThickness="1" >Settings</Button>
-                <Button Click="SaveJSONGPL_Click" BorderBrush="DarkGray" BorderThickness="1">Save JSON GPL</Button>
-                <Button Click="LoadJSONGPL_Click" BorderBrush="DarkGray" BorderThickness="1">Load JSON GPL</Button>
+                <Button Command="{Binding SaveJsonGplCommand}" BorderBrush="DarkGray" BorderThickness="1">Save JSON GPL</Button>
+                <Button Command="{Binding LoadJsonGplCommand}" BorderBrush="DarkGray" BorderThickness="1">Load JSON GPL</Button>
             </ToolBar>
         </StackPanel>
-        <avalondock:DockingManager Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3">
+        <avalondock:DockingManager Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" x:Name="dockManager">
             <avalondock:LayoutRoot>
                 <avalondock:LayoutPanel Orientation="Horizontal">
                     <avalondock:LayoutAnchorablePane DockWidth="250">

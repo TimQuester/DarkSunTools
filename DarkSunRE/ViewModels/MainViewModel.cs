@@ -17,10 +17,11 @@ namespace DarkSunRE.ViewModels
         private readonly IProjectService _projectService;
         private readonly IDialogService _dialogService;
         private readonly IStatusService _statusService;
-        private readonly IFileService _fileService;      
+        private readonly IFileService _fileService;
 
         private Project _currentProject;
         private CancellationTokenSource _operationCts;
+        private GplDocumentViewModel _activeGplDocument;
 
         public bool IsBusy { get; private set; }
         public ProjectTreeViewModel ProjectTree { get; }
@@ -32,6 +33,8 @@ namespace DarkSunRE.ViewModels
         public ICommand ExitCommand { get; }
         public ICommand CancelOperationCommand { get; }
         public ICommand SettingsCommand { get; }
+        public ICommand SaveJsonGplCommand { get; }
+        public ICommand LoadJsonGplCommand { get; }
 
         public bool IsModified;
 
@@ -56,6 +59,57 @@ namespace DarkSunRE.ViewModels
             CancelOperationCommand = new RelayCommand(CancelOperation, () => IsBusy);
             ExitCommand = new RelayCommand(ExecuteExit);
             SettingsCommand = new RelayCommand(OpenSettings);
+            SaveJsonGplCommand = new RelayCommand(SaveJsonGpl, CanSaveLoadJsonGpl);
+            LoadJsonGplCommand = new RelayCommand(LoadJsonGpl, CanSaveLoadJsonGpl);
+        }
+
+        // Свойство для хранения активного GPL документа
+        public GplDocumentViewModel ActiveGplDocument
+        {
+            get => _activeGplDocument;
+            set
+            {
+                _activeGplDocument = value;
+                // Обновляем состояние команд
+                ((RelayCommand)SaveJsonGplCommand).RaiseCanExecuteChanged();
+                ((RelayCommand)LoadJsonGplCommand).RaiseCanExecuteChanged();
+            }
+        }
+
+        // Метод для получения активного GPL документа
+        private GplDocumentViewModel GetActiveGplDocumentViewModel()
+        {
+            return ActiveGplDocument;
+        }
+
+        private bool CanSaveLoadJsonGpl()
+        {
+            // Проверяем, есть ли активный GPL документ
+            return GetActiveGplDocumentViewModel() != null &&
+                   CurrentProject != null &&
+                   !string.IsNullOrWhiteSpace(CurrentProject.JsonFolderPath);
+        }
+
+        private void SaveJsonGpl()
+        {
+            var docVm = GetActiveGplDocumentViewModel();
+            if (docVm == null) return;
+
+            if (string.IsNullOrWhiteSpace(CurrentProject?.JsonFolderPath))
+            {
+                _statusService.ShowError("JSON folder path is not configured for the current project.");
+                return;
+            }
+
+            try
+            {
+                docVm.SaveJson(CurrentProject.JsonFolderPath);
+                _statusService.ShowSuccess("JSON file saved successfully.");
+            }
+            catch (Exception ex)
+            {
+                _statusService.ShowError($"Failed to save JSON: {ex.Message}", ex);
+            }
         }
 
         // Implemented to handle events coming from services (ResourceChanged)
@@ -96,7 +150,7 @@ namespace DarkSunRE.ViewModels
             {
                 SetProperty(ref _currentProject, value);
                 ProjectTree.CurrentProject = value;
-            }                
+            }
         }
 
         protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string propertyName = null)
@@ -145,7 +199,7 @@ namespace DarkSunRE.ViewModels
         private void OnStatusChanged(object sender, GffFileEventArgs e)
         {
             // Обработка изменений статусов
-        } 
+        }
 
         private bool ValidateProjectParameters(CreateProjectViewModel vm)
         {
@@ -164,7 +218,7 @@ namespace DarkSunRE.ViewModels
             return true;
         }
 
-        public ObservableCollection<DocumentViewModel> Documents { get; set; }        
+        public ObservableCollection<DocumentViewModel> Documents { get; set; }
         public CommandManager CommandManager { get; set; }
 
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -209,7 +263,7 @@ namespace DarkSunRE.ViewModels
                 {
                     _statusService.ShowProgress(s.Message, s.Progress ?? 0, s.IsIndeterminate);
                 });
-                
+
                 var project = await _projectService.LoadProjectAsync(filePath, progress, _operationCts.Token);
 
                 if (project == null)
@@ -217,7 +271,7 @@ namespace DarkSunRE.ViewModels
                     _statusService.ShowError($"Failed to open project: {Path.GetFileName(filePath)}");
                     return;
                 }
-                
+
                 CurrentProject = project;
                 IsModified = false;
                 OnPropertyChanged(nameof(IsModified));
@@ -252,7 +306,7 @@ namespace DarkSunRE.ViewModels
             {
                 IsBusy = true;
                 OnPropertyChanged(nameof(IsBusy));
-                
+
                 await _projectService.SaveProjectAsync(CurrentProject);
 
                 _statusService.ShowSuccess($"Project '{CurrentProject.ProjectName}' saved.");
@@ -293,11 +347,11 @@ namespace DarkSunRE.ViewModels
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }      
+        }
 
         public void ReplaceResource(Project project, string gffFileName, ResourceInfo resource, byte[] newData)
-        {            
-            var reArgs = new Services.ResourceEventArgs(ProjectAction.ResourceReplaced, project, resource, gffFileName);            
+        {
+            var reArgs = new Services.ResourceEventArgs(ProjectAction.ResourceReplaced, project, resource, gffFileName);
             OnResourceChanged(this, reArgs);
             var pjArgs = new ProjectEventArgs(ProjectAction.Modified, project);
             OnProjectChanged(this, pjArgs);
@@ -309,18 +363,48 @@ namespace DarkSunRE.ViewModels
             vm.InitializeFromProject(CurrentProject);
             var result = _dialogService.ShowDialog(vm);
             if (result == true)
-            {                
-                if (vm.DialogResult == true)                
+            {
+                if (vm.DialogResult == true)
                     if (CurrentProject != null)
                     {
                         CurrentProject.OriginalGamePath = vm.OriginalGamePath;
-                        CurrentProject.ModifiedGamePath = vm.ModifiedGamePath;                        
+                        CurrentProject.ModifiedGamePath = vm.ModifiedGamePath;
                         CurrentProject.JsonFolderPath = vm.JsonFolderPath;
                         CurrentProject.TransliterationRules = vm.GetTransliterationRules();
                         _statusService.SetProjectPath(CurrentProject.ModifiedGamePath ?? CurrentProject.OriginalGamePath);
                         _statusService.SetJsonFolder(CurrentProject.JsonFolderPath);
                         _projectService.SaveProject(CurrentProject);
-                    }                
+                    }
+            }
+        }
+        private void LoadJsonGpl()
+        {
+            var docVm = GetActiveGplDocumentViewModel();
+            if (docVm == null) return;
+
+            if (string.IsNullOrWhiteSpace(CurrentProject?.JsonFolderPath))
+            {
+                _statusService.ShowError("JSON folder path is not configured for the current project.");
+                return;
+            }
+
+            var filename = Path.Combine(CurrentProject.JsonFolderPath,
+                                      $"{docVm.FileName}_{docVm.ResourceName}.json");
+
+            if (!File.Exists(filename))
+            {
+                _statusService.ShowError($"File {filename} not found");
+                return;
+            }
+
+            try
+            {
+                docVm.LoadJson(filename);
+                _statusService.ShowSuccess("JSON file loaded successfully.");
+            }
+            catch (Exception ex)
+            {
+                _statusService.ShowError($"Failed to load JSON: {ex.Message}", ex);
             }
         }
     }

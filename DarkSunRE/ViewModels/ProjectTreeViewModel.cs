@@ -23,6 +23,8 @@ namespace DarkSunRE.ViewModels
 
         public ICommand NodeDoubleClickedCommand { get; }
         public ICommand GenerateNewFileCommand { get; }
+        public ICommand SaveAllJsonsCommand { get; }
+        public ICommand LoadAllJsonsCommand { get; }
 
         public ProjectTreeViewModel(IProjectService projectService, IStatusService statusService)
         {
@@ -35,9 +37,10 @@ namespace DarkSunRE.ViewModels
             ExpandAllCommand = new RelayCommand(ExpandAll);
             CollapseAllCommand = new RelayCommand(CollapseAll);
             RefreshCommand = new RelayCommand(RefreshTree);
-
             NodeDoubleClickedCommand = new RelayCommand<ProjectNode>(OnNodeDoubleClicked);
             GenerateNewFileCommand = new RelayCommand<ProjectNode>(GenerateNewFile);
+            SaveAllJsonsCommand = new RelayCommand<ProjectNode>(SaveAllJsons);
+            LoadAllJsonsCommand = new RelayCommand<ProjectNode>(LoadAllJsons);
         }
 
         public Project CurrentProject
@@ -60,7 +63,7 @@ namespace DarkSunRE.ViewModels
         public ICommand DoubleClickCommand { get; }
         public Func<bool> CanGenerateNewFile { get; private set; }
 
-        public void SaveAllJsons(ProjectNode node)
+        private void SaveAllJsons(ProjectNode node)
         {
             if (CurrentProject == null || string.IsNullOrWhiteSpace(CurrentProject.JsonFolderPath))
             {
@@ -92,7 +95,7 @@ namespace DarkSunRE.ViewModels
             _statusService.ShowSuccess("All JSONs saved.");
         }
 
-        public void LoadAllJsons(ProjectNode node)
+        private void LoadAllJsons(ProjectNode node)
         {
             if (CurrentProject == null || string.IsNullOrWhiteSpace(CurrentProject.JsonFolderPath))
             {
@@ -126,7 +129,7 @@ namespace DarkSunRE.ViewModels
             _statusService.ShowSuccess("All JSONs loaded.");
         }
 
-        public void GenerateNewFile(ProjectNode node)
+        private void GenerateNewFile(ProjectNode node)
         {
             if (node == null || node.ItemType != ProjectItemType.GffFile || CurrentProject == null)
                 return;

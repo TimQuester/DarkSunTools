@@ -11,6 +11,8 @@ using DarkSunRE.Models;
 using DarkSunRE.Services;
 using System.Collections.ObjectModel;
 using DSunTools.Common.Gff;
+using System.Windows.Input;
+using DarkSunRE.Commands;
 
 namespace DarkSunRE.ViewModels
 {
@@ -23,6 +25,10 @@ namespace DarkSunRE.ViewModels
         private ObservableCollection<PaletteInfo> _availablePalettes;
         private Project _project;
         private ResourceInfo _resourceInfo;
+        private double _scale = 1.0;
+        private ICommand _zoomInCommand;
+        private ICommand _zoomOutCommand;
+        private ICommand _resetZoomCommand;
 
         public ImageSource ImageSource
         {
@@ -76,12 +82,32 @@ namespace DarkSunRE.ViewModels
             }
         }
 
+        public double Scale
+        {
+            get => _scale;
+            set
+            {
+                _scale = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ScalePercentage));
+            }
+        }
+
+        public int ScalePercentage => (int)(_scale * 100);
+
+        public ICommand ZoomInCommand => _zoomInCommand ?? (_zoomInCommand = new RelayCommand(ZoomIn));
+        public ICommand ZoomOutCommand => _zoomOutCommand ?? (_zoomOutCommand = new RelayCommand(ZoomOut));
+        public ICommand ResetZoomCommand => _resetZoomCommand ?? (_resetZoomCommand = new RelayCommand(ResetZoom));
+
         public ImageResourceViewModel()
         {
             Title = "Image";
             ToolTip = "Image Resource";
             CanClose = true;
             AvailablePalettes = new ObservableCollection<PaletteInfo>();
+            _zoomInCommand = new RelayCommand(ZoomIn);
+            _zoomOutCommand = new RelayCommand(ZoomOut);
+            _resetZoomCommand = new RelayCommand(ResetZoom);
         }
 
         public void Initialize(Project project, ResourceInfo resourceInfo, byte[] imageData)
@@ -108,6 +134,30 @@ namespace DarkSunRE.ViewModels
         public override void Save()
         {
             // Для изображений сохранение не требуется
+        }
+
+        private void ZoomIn()
+        {
+            if (_scale < 10.0)
+            {
+                Scale = Math.Min(_scale * 1.5, 10.0);
+                LoadImage();
+            }
+        }
+
+        private void ZoomOut()
+        {
+            if (_scale > 0.1)
+            {
+                Scale = Math.Max(_scale / 1.5, 0.1);
+                LoadImage();
+            }
+        }
+
+        private void ResetZoom()
+        {
+            Scale = 1.0;
+            LoadImage();
         }
 
         private void LoadAvailablePalettes()
@@ -174,16 +224,29 @@ namespace DarkSunRE.ViewModels
                     int width = frame.Width;
                     int height = frame.Height;
 
-                    // Создаем массив пикселей для BitmapSource
-                    var pixelData = new byte[width * height * 4]; // 4 байта на пиксель (BGRA)
+                    // Если масштаб не 1.0, создаем увеличенное изображение
+                    int scaledWidth = (int)(width * _scale);
+                    int scaledHeight = (int)(height * _scale);
 
-                    // Заполняем пиксели
-                    for (int y = 0; y < height; y++)
+                    // Создаем массив пикселей для BitmapSource
+                    var pixelData = new byte[scaledWidth * scaledHeight * 4]; // 4 байта на пиксель (BGRA)
+
+                    // Заполняем пиксели с масштабированием
+                    for (int y = 0; y < scaledHeight; y++)
                     {
-                        for (int x = 0; x < width; x++)
+                        for (int x = 0; x < scaledWidth; x++)
                         {
-                            int pixelIndex = y * width + x;
-                            int byteIndex = pixelIndex * 4; // 4 байта на пиксель (BGRA)
+                            // Определяем исходный пиксель
+                            int originalX = (int)(x / _scale);
+                            int originalY = (int)(y / _scale);
+                            
+                            // Проверяем границы
+                            if (originalX >= width || originalY >= height)
+                                continue;
+
+                            int pixelIndex = originalY * width + originalX;
+                            int scaledPixelIndex = y * scaledWidth + x;
+                            int byteIndex = scaledPixelIndex * 4; // 4 байта на пиксель (BGRA)
 
                             // Получаем индекс пикселя из данных изображения
                             byte paletteIndex = pixels[pixelIndex];
@@ -217,14 +280,14 @@ namespace DarkSunRE.ViewModels
 
                     // Создаем BitmapSource из массива пикселей
                     var bitmap = BitmapSource.Create(
-                        width,
-                        height,
+                        scaledWidth,
+                        scaledHeight,
                         96, // DPI X
                         96, // DPI Y
                         PixelFormats.Bgra32,
                         null, // палитра
                         pixelData,
-                        width * 4 // шаг строки
+                        scaledWidth * 4 // шаг строки
                     );
 
                     ImageSource = bitmap;

@@ -19,6 +19,7 @@ namespace DarkSunRE.ViewModels
     {
         private readonly IProjectService _projectService;
         private readonly IStatusService _statusService;
+        private readonly IResourceService _resourceService;
         private Project _currentProject;
 
         public ICommand NodeDoubleClickedCommand { get; }
@@ -26,10 +27,11 @@ namespace DarkSunRE.ViewModels
         public ICommand SaveAllJsonsCommand { get; }
         public ICommand LoadAllJsonsCommand { get; }
 
-        public ProjectTreeViewModel(IProjectService projectService, IStatusService statusService)
+        public ProjectTreeViewModel(IProjectService projectService, IStatusService statusService, IResourceService resourceService)
         {
             _projectService = projectService;
             _statusService = statusService;
+            _resourceService = resourceService;
 
             RootNodes = new ObservableCollection<ProjectNode>();
 
@@ -148,7 +150,7 @@ namespace DarkSunRE.ViewModels
 
             try
             {
-                var gff = DSunTools.Common.Gff.GffFile.Create(file.Data);
+                var gff = _resourceService.ParseGffFile(file.Data);
                 var updatedBytes = file.Data;
 
                 if (file.Resources != null)
@@ -163,8 +165,8 @@ namespace DarkSunRE.ViewModels
                         {
                             doc.TransliterationRules = CurrentProject.TransliterationRules ?? new List<TransliterationRule>();
                             doc.ApplyStringChanges();
-                            updatedBytes = gff.ReplaceResource(resource.Tag, resource.Number, doc.newBytes);
-                            gff = DSunTools.Common.Gff.GffFile.Create(updatedBytes); // refresh tables for next replace
+                            updatedBytes = _resourceService.ReplaceResource(gff, resource.Tag, resource.Number, doc.newBytes);
+                            gff = _resourceService.ParseGffFile(updatedBytes); // refresh tables for next replace
                         }
                     }
                 }

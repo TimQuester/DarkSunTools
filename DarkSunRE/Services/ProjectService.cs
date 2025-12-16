@@ -1,5 +1,5 @@
 ﻿using DarkSunRE.Models;
-using DSunTools.Common.Gff;
+using DarkSunRE.Services;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -173,10 +173,10 @@ namespace DarkSunRE.Services
                     }
 
                     // Parse GFF on threadpool (CPU-bound)
-                    GffFile gffFile;
+                    DSunTools.Common.Gff.GffFile gffFile;
                     try
                     {
-                        gffFile = await Task.Run(() => GffFile.Create(bytes), cancellationToken).ConfigureAwait(false);
+                        gffFile = await Task.Run(() => DSunTools.Common.Gff.GffFile.Create(bytes), cancellationToken).ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
@@ -367,7 +367,7 @@ namespace DarkSunRE.Services
             return SaveProjectAsync(project, CancellationToken.None);
         }
 
-        public List<ResourceInfo> ExtractResources(GffFile gffFile)
+        public List<ResourceInfo> ExtractResources(DSunTools.Common.Gff.GffFile gffFile)
         {
             var resources = new List<ResourceInfo>();
             var descriptors = gffFile.DescribeResources();

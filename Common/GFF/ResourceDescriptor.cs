@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace DSunTools.Common.GFF
+namespace DSunTools.Common.Gff
 {
     public class ResourceDescriptor
     {

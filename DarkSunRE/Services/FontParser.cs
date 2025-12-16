@@ -39,7 +39,7 @@ namespace DarkSunRE.Services
                 characters.Add(new FontCharacter
                 {
                     CharCode = charCode,
-                    Width = width,
+                    Width = width > 0 ? width - 1 : 0, // Adjust width to account for removed column
                     Pixels = DecodePixels(characterData, width)
                 });
 
@@ -52,13 +52,16 @@ namespace DarkSunRE.Services
 
         private byte[,] DecodePixels(byte[] data, int width)
         {
-            var pixels = new byte[Height, width];
+            // If width is greater than 0, we skip the first column of pixels (offset issue)
+            int displayWidth = width > 0 ? width - 1 : 0;
+            var pixels = new byte[Height, displayWidth];
 
             for (int y = 0; y < Height; y++)
             {
-                for (int x = 0; x < width; x++)
+                for (int x = 0; x < displayWidth; x++)
                 {
-                    int index = y * width + x;
+                    // Skip first column (x+1) to compensate for the offset
+                    int index = y * width + (x + 1);
                     pixels[y, x] = data[index];
                 }
             }

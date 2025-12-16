@@ -8,6 +8,8 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Media;
 
+using DSunTools.Common.Gff;
+
 namespace DarkSunRE.Services
 {
     public interface IResourceService
@@ -22,5 +24,11 @@ namespace DarkSunRE.Services
 
         bool CanEditResource(ResourceType resourceType);
         DocumentViewModel CreateEditorViewModel(ResourceInfo resourceInfo, byte[] data);
+        
+        // Методы для работы с GFF файлами
+        GffFile ParseGffFile(byte[] gffBytes);
+        byte[] GetResourceData(GffFile gffFile, string tag, int resourceNumber);
+        byte[] ReplaceResource(GffFile gffFile, string tag, int resourceNumber, byte[] replacement);
+        List<ResourceDescriptor> DescribeResources(GffFile gffFile);
     }
 }

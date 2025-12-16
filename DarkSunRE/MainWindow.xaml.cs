@@ -6,7 +6,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using Xceed.Wpf.AvalonDock.Layout;
-using DSunTools.Common.Gff;
+using DarkSunRE.Services;
 
 namespace DarkSunRE
 {
@@ -15,9 +15,11 @@ namespace DarkSunRE
     /// </summary>
     public partial class MainWindow : Window
     {
+        private readonly IResourceService _resourceService;
 
-        public MainWindow()
+        public MainWindow(IResourceService resourceService)
         {
+            _resourceService = resourceService;
             InitializeComponent();
             SetupInputBindings();
 
@@ -41,7 +43,7 @@ namespace DarkSunRE
             UpdateActiveGplDocument();
         }
 
-        private void ProjectTree_ResourceOpened(object? sender, ResourceEventArgs e)
+        private void ProjectTree_ResourceOpened(object? sender, DarkSunRE.ViewModels.ResourceEventArgs e)
         {
             // Only handle GPL-like resources (you can extend detection by resource type)
             if (e?.Resource == null || e.Project == null) return;
@@ -82,8 +84,8 @@ namespace DarkSunRE
                         }
                     }
 
-                    var gff = GffFile.Create(gffBytes);
-                    var resourceBytes = gff.GetResourceData(resource.Tag, resource.Number);
+                    var gff = _resourceService.ParseGffFile(gffBytes);
+                    var resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
 
                     string docName = $"{container.Name}:{resource.Tag}-{resource.Number}";
                     string resourceName = $"{resource.Tag}-{resource.Number}";

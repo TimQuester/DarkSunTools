@@ -374,7 +374,6 @@ namespace DarkSunRE.Services
             return data;
         }
 
-
         #region CreateViewModels
         private DocumentViewModel CreateGplDocumentViewModel(ResourceInfo resourceInfo, byte[] data)
         {
@@ -391,7 +390,11 @@ namespace DarkSunRE.Services
         private DocumentViewModel CreateImageResourceViewModel(ResourceInfo resourceInfo, byte[] data)
         {
             // Реализация для изображений
-            return new ImageResourceViewModel();
+            var viewModel = new ImageResourceViewModel();
+            // viewModel.ImageData = data;
+            // viewModel.Title = $"{resourceInfo.Tag}-{resourceInfo.Number}";
+            // viewModel.File = $"{resourceInfo.Tag}-{resourceInfo.Number}";
+            return viewModel;
         }
 
         private DocumentViewModel CreatePaletteViewModel(ResourceInfo resourceInfo, byte[] data)

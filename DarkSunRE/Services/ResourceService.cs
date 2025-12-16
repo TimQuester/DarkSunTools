@@ -87,25 +87,32 @@ namespace DarkSunRE.Services
             {
                 "BMP " or "TGA " or
                 "SPR " or "ICON" or
-                "APFM" or "BUTN" or
-                "EBOX" or "ACCL" => ResourceType.Image,
+                "BUTN" or "WALL" or
+                "PORT" or "CMAT" or
+                "TILE" or "CBMP" => ResourceType.Image,
                 "PAL " or "CPAL" => ResourceType.Palette,
                 "FNT " => ResourceType.Font,
-                "TEXT" or "MSG " or "NAME" => ResourceType.Text,
+                "TEXT" or "MSG " or
+                "NAME" or "MERR" or
+                "ETME" or "SPIN" or
+                "RNME" => ResourceType.Text,
                 "GPL " => ResourceType.Script,
                 "WAV " or "VOC " or
                 "BVOC" => ResourceType.Sound,
                 "ITM " => ResourceType.Item,
                 "CHR " => ResourceType.Character,
                 "RMAP" or "GMAP" => ResourceType.Map,
-                "TILE" => ResourceType.Tileset,
-                "ANM " => ResourceType.Animation,
+                "ANM " or "BMA " => ResourceType.Animation,
+                "ACF " => ResourceType.AnimationControl,                
+                "PSEQ" or "CSEQ" or
+                "LSEQ" or "GSEQ" or
+                "FSEQ" => ResourceType.Music,
                 "ETAB" => ResourceType.Item,
-                "MAS " or "WALL" or 
-                "PORT" or "IT1R" or 
+                "MAS " or "IT1R" or
+                "EBOX" or "ACCL" or
                 "GPLX" or "GPLI" or
                 "GFFI" or "WIND" or
-                "ADV " or "CMAT" => ResourceType.Unknown,
+                "ADV " or "APFM" => ResourceType.Unknown,
                 _ => ResourceType.Unknown
             };
         }

@@ -38,45 +38,14 @@ namespace DarkSunRE.Views
 
         private void TreeView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            if (e.OriginalSource is FrameworkElement source &&
-                source.DataContext is ProjectNode node &&
-                node.ItemType == ProjectItemType.Resource)
+            if (DataContext is ProjectTreeViewModel vm &&
+                e.OriginalSource is FrameworkElement source &&
+                source.DataContext is ProjectNode node)
             {
-                // Открываем ресурс при двойном клике
-                if (DataContext is ProjectTreeViewModel vm)
+                if (vm.NodeDoubleClickedCommand.CanExecute(node))
                 {
-                    vm.OpenResource(node.Tag, node.ResourceNumber);
+                    vm.NodeDoubleClickedCommand.Execute(node);
                 }
-            }
-        }
-
-        private void GenerateNewFile_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement element &&
-                element.DataContext is ProjectNode node &&
-                DataContext is ProjectTreeViewModel vm)
-            {
-                vm.GenerateNewFile(node);
-            }
-        }
-
-        private void SaveAllJsons_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement element &&
-                element.DataContext is ProjectNode node &&
-                DataContext is ProjectTreeViewModel vm)
-            {
-                vm.SaveAllJsons(node);
-            }
-        }
-
-        private void LoadAllJsons_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement element &&
-                element.DataContext is ProjectNode node &&
-                DataContext is ProjectTreeViewModel vm)
-            {
-                vm.LoadAllJsons(node);
             }
         }
     }

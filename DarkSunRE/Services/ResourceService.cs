@@ -406,7 +406,9 @@ namespace DarkSunRE.Services
         private DocumentViewModel CreateFontResourceViewModel(ResourceInfo resourceInfo, byte[] data)
         {
             // Реализация для шрифтов
-            return new FontResourceViewModel();
+            var viewModel = new FontResourceViewModel();
+            // Note: This will be initialized properly in MainWindow when the project context is available
+            return viewModel;
         }
 
         private DocumentViewModel CreateRawDataViewModel(ResourceInfo resourceInfo, byte[] data)

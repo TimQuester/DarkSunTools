@@ -44,6 +44,8 @@ namespace DarkSunRE.ViewModels
         public ICommand SaveAllJsonsCommand { get; }
         public ICommand LoadAllJsonsCommand { get; }
         public ICommand ToggleFilterCommand { get; }
+        public ICommand SelectAllFiltersCommand { get; }
+        public ICommand DeselectAllFiltersCommand { get; }
 
         public ProjectTreeViewModel(IProjectService projectService, IStatusService statusService, IResourceService resourceService)
         {
@@ -63,6 +65,8 @@ namespace DarkSunRE.ViewModels
             SaveAllJsonsCommand = new RelayCommand<ProjectNode>(SaveAllJsons);
             LoadAllJsonsCommand = new RelayCommand<ProjectNode>(LoadAllJsons);
             ToggleFilterCommand = new RelayCommand<string>(ToggleFilter);
+            SelectAllFiltersCommand = new RelayCommand(SelectAllFilters);
+            DeselectAllFiltersCommand = new RelayCommand(DeselectAllFilters);
         }
 
         public Project CurrentProject
@@ -229,6 +233,44 @@ namespace DarkSunRE.ViewModels
                 SetProperty(ref _showUnknown, value);
                 ApplyFilters();
             }
+        }
+
+        private void SelectAllFilters()
+        {
+            ShowImages = true;
+            ShowPalettes = true;
+            ShowFonts = true;
+            ShowTexts = true;
+            ShowScripts = true;
+            ShowSounds = true;
+            ShowMusic = true;
+            ShowDialogs = true;
+            ShowItems = true;
+            ShowCharacters = true;
+            ShowMaps = true;
+            ShowAnimations = true;
+            ShowRawData = true;
+            ShowAnimationControls = true;
+            ShowUnknown = true;
+        }
+
+        private void DeselectAllFilters()
+        {
+            ShowImages = false;
+            ShowPalettes = false;
+            ShowFonts = false;
+            ShowTexts = false;
+            ShowScripts = false;
+            ShowSounds = false;
+            ShowMusic = false;
+            ShowDialogs = false;
+            ShowItems = false;
+            ShowCharacters = false;
+            ShowMaps = false;
+            ShowAnimations = false;
+            ShowRawData = false;
+            ShowAnimationControls = false;
+            ShowUnknown = false;
         }
 
         public ICommand ExpandAllCommand { get; }

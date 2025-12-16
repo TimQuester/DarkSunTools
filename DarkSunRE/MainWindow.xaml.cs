@@ -94,6 +94,12 @@ namespace DarkSunRE
                     }
                     
                     documentViewModel = _resourceService.CreateEditorViewModel(resource, resourceBytes);
+                    
+                    // Для изображений инициализируем вьюмодель с проектом и информацией о ресурсе
+                    if (documentViewModel is ImageResourceViewModel imageViewModel)
+                    {
+                        imageViewModel.Initialize(project, resource, resourceBytes);
+                    }
                 }
                 else
                 {

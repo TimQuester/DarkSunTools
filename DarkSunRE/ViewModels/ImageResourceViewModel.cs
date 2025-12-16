@@ -7,6 +7,10 @@ using System.Threading.Tasks;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using DSunTools.Common.Image;
+using DarkSunRE.Models;
+using DarkSunRE.Services;
+using System.Collections.ObjectModel;
+using DSunTools.Common.Gff;
 
 namespace DarkSunRE.ViewModels
 {
@@ -15,6 +19,10 @@ namespace DarkSunRE.ViewModels
         private ImageSource _imageSource;
         private byte[] _imageData;
         private string _imagePath;
+        private PaletteInfo _selectedPalette;
+        private ObservableCollection<PaletteInfo> _availablePalettes;
+        private Project _project;
+        private ResourceInfo _resourceInfo;
 
         public ImageSource ImageSource
         {
@@ -47,11 +55,49 @@ namespace DarkSunRE.ViewModels
             }
         }
 
+        public PaletteInfo SelectedPalette
+        {
+            get => _selectedPalette;
+            set
+            {
+                _selectedPalette = value;
+                OnPropertyChanged();
+                LoadImage(); // Перезагружаем изображение с новой палитрой
+            }
+        }
+
+        public ObservableCollection<PaletteInfo> AvailablePalettes
+        {
+            get => _availablePalettes;
+            set
+            {
+                _availablePalettes = value;
+                OnPropertyChanged();
+            }
+        }
+
         public ImageResourceViewModel()
         {
             Title = "Image";
             ToolTip = "Image Resource";
             CanClose = true;
+            AvailablePalettes = new ObservableCollection<PaletteInfo>();
+        }
+
+        public void Initialize(Project project, ResourceInfo resourceInfo, byte[] imageData)
+        {
+            _project = project;
+            _resourceInfo = resourceInfo;
+            ImageData = imageData;
+            
+            // Загружаем доступные палитры из проекта
+            LoadAvailablePalettes();
+            
+            // Устанавливаем первую палитру по умолчанию
+            if (AvailablePalettes.Count > 0)
+            {
+                SelectedPalette = AvailablePalettes[0];
+            }
         }
 
         public override void Reload()
@@ -62,6 +108,52 @@ namespace DarkSunRE.ViewModels
         public override void Save()
         {
             // Для изображений сохранение не требуется
+        }
+
+        private void LoadAvailablePalettes()
+        {
+            if (_project?.Files == null)
+                return;
+
+            AvailablePalettes.Clear();
+
+            // Ищем все палитры в файлах проекта
+            foreach (var file in _project.Files)
+            {
+                if (file.Resources == null)
+                    continue;
+
+                foreach (var resource in file.Resources)
+                {
+                    if (resource.Type == ResourceType.Palette)
+                    {
+                        try
+                        {
+                            // Извлекаем данные палитры
+                            var gff = GffFile.Create(file.Data);
+                            var paletteData = gff.GetResourceData(resource.Tag, resource.Number);
+                            
+                            if (paletteData != null && paletteData.Length == 768) // PAL файлы обычно 768 байт
+                            {
+                                var palette = Palette.FromPalData(paletteData);
+                                var paletteInfo = new PaletteInfo
+                                {
+                                    Palette = palette,
+                                    Name = $"{resource.Tag}-{resource.Number}",
+                                    Tag = resource.Tag,
+                                    Number = resource.Number
+                                };
+                                AvailablePalettes.Add(paletteInfo);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            // Игнорируем ошибки при загрузке палитр
+                            System.Diagnostics.Debug.WriteLine($"Failed to load palette {resource.Tag}-{resource.Number}: {ex.Message}");
+                        }
+                    }
+                }
+            }
         }
 
         private void LoadImage()
@@ -96,11 +188,23 @@ namespace DarkSunRE.ViewModels
                             // Получаем индекс пикселя из данных изображения
                             byte paletteIndex = pixels[pixelIndex];
 
-                            // Для простоты используем фиксированную палитру
-                            // В реальной реализации нужно получать палитру из ресурсов
-                            byte red = (byte)(paletteIndex * 4);
-                            byte green = (byte)(paletteIndex * 2);
-                            byte blue = (byte)(paletteIndex * 1);
+                            // Используем выбранную палитру или фиксированную палитру по умолчанию
+                            byte red, green, blue;
+                            if (_selectedPalette?.Palette != null && paletteIndex < 256)
+                            {
+                                var color = _selectedPalette.Palette.GetColor(paletteIndex);
+                                red = (byte)color.Red;
+                                green = (byte)color.Green;
+                                blue = (byte)color.Blue;
+                            }
+                            else
+                            {
+                                // Фиксированная палитра по умолчанию
+                                red = (byte)(paletteIndex * 4);
+                                green = (byte)(paletteIndex * 2);
+                                blue = (byte)(paletteIndex * 1);
+                            }
+                            
                             byte alpha = alphaMask.Get(pixelIndex) ? (byte)255 : (byte)0;
 
                             // Записываем пиксель в массив (BGRA формат)
@@ -132,5 +236,13 @@ namespace DarkSunRE.ViewModels
                 ImageSource = null;
             }
         }
+    }
+
+    public class PaletteInfo
+    {
+        public Palette Palette { get; set; }
+        public string Name { get; set; }
+        public string Tag { get; set; }
+        public int Number { get; set; }
     }
 }

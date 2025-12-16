@@ -7,7 +7,24 @@
              mc:Ignorable="d" 
              d:DesignHeight="450" d:DesignWidth="800">
     <Grid>
-        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Панель с элементами управления -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="5">
+            <TextBlock Text="Palette:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+            <ComboBox x:Name="PaletteComboBox" 
+                      ItemsSource="{Binding AvailablePalettes}"
+                      SelectedItem="{Binding SelectedPalette}"
+                      DisplayMemberPath="Name"
+                      Width="200"
+                      Margin="0,0,10,0"/>
+        </StackPanel>
+        
+        <!-- Панель с изображением -->
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
             <Image x:Name="ImageView" Source="{Binding ImageSource}" Stretch="None" />
         </ScrollViewer>
     </Grid>

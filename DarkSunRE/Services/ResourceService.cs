@@ -391,9 +391,9 @@ namespace DarkSunRE.Services
         {
             // Реализация для изображений
             var viewModel = new ImageResourceViewModel();
-            viewModel.ImageData = data;
-            viewModel.Title = $"{resourceInfo.Tag}-{resourceInfo.Number}";
-            viewModel.File = $"{resourceInfo.Tag}-{resourceInfo.Number}";
+            // viewModel.ImageData = data;
+            // viewModel.Title = $"{resourceInfo.Tag}-{resourceInfo.Number}";
+            // viewModel.File = $"{resourceInfo.Tag}-{resourceInfo.Number}";
             return viewModel;
         }
 

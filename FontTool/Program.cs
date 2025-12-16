@@ -46,7 +46,7 @@ public class FontParser
             glyphs.Add(new Glyph
             {
                 CharCode = charCode++,
-                Width = width,
+                Width = width > 0 ? width - 1 : 0, // Adjust width to account for removed column
                 Pixels = DecodePixels(glyphData, width)
             });
 

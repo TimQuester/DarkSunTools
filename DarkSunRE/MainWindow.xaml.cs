@@ -101,6 +101,37 @@ namespace DarkSunRE
                         imageViewModel.Initialize(project, resource, resourceBytes);
                     }
                 }
+                else if (resource.Type == ResourceType.Font)
+                {
+                    // Для шрифтов создаем FontResourceViewModel
+                    byte[] resourceBytes = null;
+                    
+                    // prefer on-disk modified file if it exists
+                    if (!string.IsNullOrWhiteSpace(project.ModifiedGamePath))
+                    {
+                        var modifiedPath = Path.Combine(project.ModifiedGamePath, container.Name);
+                        if (File.Exists(modifiedPath))
+                        {
+                            var gffBytes = File.ReadAllBytes(modifiedPath);
+                            var gff = _resourceService.ParseGffFile(gffBytes);
+                            resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
+                        }
+                    }
+                    
+                    if (resourceBytes == null)
+                    {
+                        var gff = _resourceService.ParseGffFile(container.Data);
+                        resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
+                    }
+                    
+                    documentViewModel = _resourceService.CreateEditorViewModel(resource, resourceBytes);
+                    
+                    // Для шрифтов инициализируем вьюмодель с проектом и информацией о ресурсе
+                    if (documentViewModel is FontResourceViewModel fontViewModel)
+                    {
+                        fontViewModel.Initialize(project, resource, resourceBytes);
+                    }
+                }
                 else
                 {
                     // Для других типов ресурсов (GPL и т.д.) используем старую логику
@@ -133,6 +164,10 @@ namespace DarkSunRE
                 else if (documentViewModel is ImageResourceViewModel imageViewModel)
                 {
                     view = new ImageResourceView { DataContext = imageViewModel };
+                }
+                else if (documentViewModel is FontResourceViewModel fontViewModel)
+                {
+                    view = new FontDisplayView { DataContext = fontViewModel };
                 }
                 else
                 {

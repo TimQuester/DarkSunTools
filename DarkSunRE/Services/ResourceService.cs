@@ -178,7 +178,7 @@ namespace DarkSunRE.Services
                 "PORT" or "CMAT" or
                 "TILE" or "CBMP" => ResourceType.Image,
                 "PAL " or "CPAL" => ResourceType.Palette,
-                "FNT " => ResourceType.Font,
+                "FNT " or "FONT"=> ResourceType.Font,
                 "TEXT" or "MSG " or
                 "NAME" or "MERR" or
                 "ETME" or "SPIN" or

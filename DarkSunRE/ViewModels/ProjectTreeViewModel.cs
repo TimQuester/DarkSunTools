@@ -22,10 +22,28 @@ namespace DarkSunRE.ViewModels
         private readonly IResourceService _resourceService;
         private Project _currentProject;
 
+        // Фильтры по типам ресурсов
+        private bool _showImages = true;
+        private bool _showPalettes = true;
+        private bool _showFonts = true;
+        private bool _showTexts = true;
+        private bool _showScripts = true;
+        private bool _showSounds = true;
+        private bool _showMusic = true;
+        private bool _showDialogs = true;
+        private bool _showItems = true;
+        private bool _showCharacters = true;
+        private bool _showMaps = true;
+        private bool _showAnimations = true;
+        private bool _showRawData = true;
+        private bool _showAnimationControls = true;
+        private bool _showUnknown = true;
+
         public ICommand NodeDoubleClickedCommand { get; }
         public ICommand GenerateNewFileCommand { get; }
         public ICommand SaveAllJsonsCommand { get; }
         public ICommand LoadAllJsonsCommand { get; }
+        public ICommand ToggleFilterCommand { get; }
 
         public ProjectTreeViewModel(IProjectService projectService, IStatusService statusService, IResourceService resourceService)
         {
@@ -34,6 +52,7 @@ namespace DarkSunRE.ViewModels
             _resourceService = resourceService;
 
             RootNodes = new ObservableCollection<ProjectNode>();
+            FilteredRootNodes = new ObservableCollection<ProjectNode>();
 
             // Команды для работы с деревом
             ExpandAllCommand = new RelayCommand(ExpandAll);
@@ -43,6 +62,7 @@ namespace DarkSunRE.ViewModels
             GenerateNewFileCommand = new RelayCommand<ProjectNode>(GenerateNewFile);
             SaveAllJsonsCommand = new RelayCommand<ProjectNode>(SaveAllJsons);
             LoadAllJsonsCommand = new RelayCommand<ProjectNode>(LoadAllJsons);
+            ToggleFilterCommand = new RelayCommand<string>(ToggleFilter);
         }
 
         public Project CurrentProject
@@ -58,6 +78,158 @@ namespace DarkSunRE.ViewModels
         }
 
         public ObservableCollection<ProjectNode> RootNodes { get; }
+        public ObservableCollection<ProjectNode> FilteredRootNodes { get; }
+
+        // Свойства фильтров
+        public bool ShowImages
+        {
+            get => _showImages;
+            set
+            {
+                SetProperty(ref _showImages, value);
+                ApplyFilters();
+            }
+        }
+
+        public bool ShowPalettes
+        {
+            get => _showPalettes;
+            set
+            {
+                SetProperty(ref _showPalettes, value);
+                ApplyFilters();
+            }
+        }
+
+        public bool ShowFonts
+        {
+            get => _showFonts;
+            set
+            {
+                SetProperty(ref _showFonts, value);
+                ApplyFilters();
+            }
+        }
+
+        public bool ShowTexts
+        {
+            get => _showTexts;
+            set
+            {
+                SetProperty(ref _showTexts, value);
+                ApplyFilters();
+            }
+        }
+
+        public bool ShowScripts
+        {
+            get => _showScripts;
+            set
+            {
+                SetProperty(ref _showScripts, value);
+                ApplyFilters();
+            }
+        }
+
+        public bool ShowSounds
+        {
+            get => _showSounds;
+            set
+            {
+                SetProperty(ref _showSounds, value);
+                ApplyFilters();
+            }
+        }
+
+        public bool ShowMusic
+        {
+            get => _showMusic;
+            set
+            {
+                SetProperty(ref _showMusic, value);
+                ApplyFilters();
+            }
+        }
+
+        public bool ShowDialogs
+        {
+            get => _showDialogs;
+            set
+            {
+                SetProperty(ref _showDialogs, value);
+                ApplyFilters();
+            }
+        }
+
+        public bool ShowItems
+        {
+            get => _showItems;
+            set
+            {
+                SetProperty(ref _showItems, value);
+                ApplyFilters();
+            }
+        }
+
+        public bool ShowCharacters
+        {
+            get => _showCharacters;
+            set
+            {
+                SetProperty(ref _showCharacters, value);
+                ApplyFilters();
+            }
+        }
+
+        public bool ShowMaps
+        {
+            get => _showMaps;
+            set
+            {
+                SetProperty(ref _showMaps, value);
+                ApplyFilters();
+            }
+        }
+
+        public bool ShowAnimations
+        {
+            get => _showAnimations;
+            set
+            {
+                SetProperty(ref _showAnimations, value);
+                ApplyFilters();
+            }
+        }
+
+        public bool ShowRawData
+        {
+            get => _showRawData;
+            set
+            {
+                SetProperty(ref _showRawData, value);
+                ApplyFilters();
+            }
+        }
+
+        public bool ShowAnimationControls
+        {
+            get => _showAnimationControls;
+            set
+            {
+                SetProperty(ref _showAnimationControls, value);
+                ApplyFilters();
+            }
+        }
+
+        public bool ShowUnknown
+        {
+            get => _showUnknown;
+            set
+            {
+                SetProperty(ref _showUnknown, value);
+                ApplyFilters();
+            }
+        }
 
         public ICommand ExpandAllCommand { get; }
         public ICommand CollapseAllCommand { get; }
@@ -188,6 +360,7 @@ namespace DarkSunRE.ViewModels
         private void LoadProjectTree()
         {
             RootNodes.Clear();
+            FilteredRootNodes.Clear();
 
             if (CurrentProject == null)
                 return;
@@ -237,11 +410,138 @@ namespace DarkSunRE.ViewModels
                 }
 
                 RootNodes.Add(projectNode);
+                
+                // Применяем фильтры
+                ApplyFilters();
+                
                 _statusService.ShowSuccess("Project tree loaded");
             }
             catch (Exception ex)
             {
                 _statusService.ShowError("Failed to load project tree", ex);
+            }
+        }
+
+        private void ApplyFilters()
+        {
+            FilteredRootNodes.Clear();
+
+            foreach (var rootNode in RootNodes)
+            {
+                var filteredNode = FilterNode(rootNode);
+                if (filteredNode != null)
+                {
+                    FilteredRootNodes.Add(filteredNode);
+                }
+            }
+        }
+
+        private ProjectNode FilterNode(ProjectNode node)
+        {
+            // Для проекта и GFF файлов создаем копии с детьми
+            if (node.ItemType == ProjectItemType.Project || node.ItemType == ProjectItemType.GffFile)
+            {
+                var filteredNode = new ProjectNode
+                {
+                    Name = node.Name,
+                    ItemType = node.ItemType,
+                    Item = node.Item,
+                    IsExpanded = node.IsExpanded,
+                    Tag = node.Tag,
+                    ResourceNumber = node.ResourceNumber
+                };
+
+                // Фильтруем дочерние элементы
+                foreach (var child in node.Children)
+                {
+                    var filteredChild = FilterNode(child);
+                    if (filteredChild != null)
+                    {
+                        filteredNode.Children.Add(filteredChild);
+                    }
+                }
+
+                return filteredNode;
+            }
+            // Для ресурсов применяем фильтры
+            else if (node.ItemType == ProjectItemType.Resource && node.Item is ResourceInfo resourceInfo)
+            {
+                // Проверяем, должен ли ресурс отображаться в соответствии с фильтрами
+                bool shouldShow = resourceInfo.Type switch
+                {
+                    ResourceType.Image => ShowImages,
+                    ResourceType.Palette => ShowPalettes,
+                    ResourceType.Font => ShowFonts,
+                    ResourceType.Text => ShowTexts,
+                    ResourceType.Script => ShowScripts,
+                    ResourceType.Sound => ShowSounds,
+                    ResourceType.Music => ShowMusic,
+                    ResourceType.Dialog => ShowDialogs,
+                    ResourceType.Item => ShowItems,
+                    ResourceType.Character => ShowCharacters,
+                    ResourceType.Map => ShowMaps,
+                    ResourceType.Animation => ShowAnimations,
+                    ResourceType.RawData => ShowRawData,
+                    ResourceType.AnimationControl => ShowAnimationControls,
+                    ResourceType.Unknown => ShowUnknown,
+                    _ => ShowUnknown // Для всех остальных нераспознанных типов
+                };
+
+                return shouldShow ? node : null;
+            }
+
+            return node;
+        }
+
+        private void ToggleFilter(string filterType)
+        {
+            switch (filterType)
+            {
+                case "Images":
+                    ShowImages = !ShowImages;
+                    break;
+                case "Palettes":
+                    ShowPalettes = !ShowPalettes;
+                    break;
+                case "Fonts":
+                    ShowFonts = !ShowFonts;
+                    break;
+                case "Texts":
+                    ShowTexts = !ShowTexts;
+                    break;
+                case "Scripts":
+                    ShowScripts = !ShowScripts;
+                    break;
+                case "Sounds":
+                    ShowSounds = !ShowSounds;
+                    break;
+                case "Music":
+                    ShowMusic = !ShowMusic;
+                    break;
+                case "Dialogs":
+                    ShowDialogs = !ShowDialogs;
+                    break;
+                case "Items":
+                    ShowItems = !ShowItems;
+                    break;
+                case "Characters":
+                    ShowCharacters = !ShowCharacters;
+                    break;
+                case "Maps":
+                    ShowMaps = !ShowMaps;
+                    break;
+                case "Animations":
+                    ShowAnimations = !ShowAnimations;
+                    break;
+                case "RawData":
+                    ShowRawData = !ShowRawData;
+                    break;
+                case "AnimationControls":
+                    ShowAnimationControls = !ShowAnimationControls;
+                    break;
+                case "Unknown":
+                    ShowUnknown = !ShowUnknown;
+                    break;
             }
         }
 
@@ -331,4 +631,3 @@ namespace DarkSunRE.ViewModels
         }
     }
 }
- 

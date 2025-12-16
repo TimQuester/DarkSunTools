@@ -33,8 +33,29 @@
             </ToolBar>
         </ToolBarTray>
 
+        <!-- Панель фильтров -->
+        <Expander DockPanel.Dock="Top" Header="Filters" IsExpanded="False">
+            <StackPanel>
+                <CheckBox Content="Images" IsChecked="{Binding ShowImages}" Margin="5"/>
+                <CheckBox Content="Palettes" IsChecked="{Binding ShowPalettes}" Margin="5"/>
+                <CheckBox Content="Fonts" IsChecked="{Binding ShowFonts}" Margin="5"/>
+                <CheckBox Content="Texts" IsChecked="{Binding ShowTexts}" Margin="5"/>
+                <CheckBox Content="Scripts" IsChecked="{Binding ShowScripts}" Margin="5"/>
+                <CheckBox Content="Sounds" IsChecked="{Binding ShowSounds}" Margin="5"/>
+                <CheckBox Content="Music" IsChecked="{Binding ShowMusic}" Margin="5"/>
+                <CheckBox Content="Dialogs" IsChecked="{Binding ShowDialogs}" Margin="5"/>
+                <CheckBox Content="Items" IsChecked="{Binding ShowItems}" Margin="5"/>
+                <CheckBox Content="Characters" IsChecked="{Binding ShowCharacters}" Margin="5"/>
+                <CheckBox Content="Maps" IsChecked="{Binding ShowMaps}" Margin="5"/>
+                <CheckBox Content="Animations" IsChecked="{Binding ShowAnimations}" Margin="5"/>
+                <CheckBox Content="Raw Data" IsChecked="{Binding ShowRawData}" Margin="5"/>
+                <CheckBox Content="Animation Controls" IsChecked="{Binding ShowAnimationControls}" Margin="5"/>
+                <CheckBox Content="Unknown" IsChecked="{Binding ShowUnknown}" Margin="5"/>
+            </StackPanel>
+        </Expander>
+
         <!-- Дерево проекта -->
-        <TreeView ItemsSource="{Binding RootNodes}" 
+        <TreeView ItemsSource="{Binding FilteredRootNodes}" 
                   SelectedItemChanged="TreeView_SelectedItemChanged"
                   MouseDoubleClick="TreeView_MouseDoubleClick">
             <TreeView.ItemContainerStyle>

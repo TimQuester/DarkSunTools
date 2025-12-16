@@ -4,6 +4,7 @@ using DarkSunRE.Views;
 using Microsoft.Win32;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using Xceed.Wpf.AvalonDock.Layout;
 using DarkSunRE.Services;
@@ -65,15 +66,38 @@ namespace DarkSunRE
                     string.Equals(d.FileName, container.Name, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(d.ResourceName, $"{resource.Tag}-{resource.Number}", StringComparison.OrdinalIgnoreCase));
 
-                GPLDocument document;
-                if (existingDoc != null)
+                GPLDocument document = null;
+                DocumentViewModel documentViewModel = null;
+                
+                // Проверяем тип ресурса и создаем соответствующую вьюмодель
+                if (resource.Type == ResourceType.Image)
                 {
-                    existingDoc.TransliterationRules = project.TransliterationRules ?? new List<TransliterationRule>();
-                    document = existingDoc;
+                    // Для изображений создаем ImageResourceViewModel
+                    byte[] resourceBytes = null;
+                    
+                    // prefer on-disk modified file if it exists
+                    if (!string.IsNullOrWhiteSpace(project.ModifiedGamePath))
+                    {
+                        var modifiedPath = Path.Combine(project.ModifiedGamePath, container.Name);
+                        if (File.Exists(modifiedPath))
+                        {
+                            var gffBytes = File.ReadAllBytes(modifiedPath);
+                            var gff = _resourceService.ParseGffFile(gffBytes);
+                            resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
+                        }
+                    }
+                    
+                    if (resourceBytes == null)
+                    {
+                        var gff = _resourceService.ParseGffFile(container.Data);
+                        resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
+                    }
+                    
+                    documentViewModel = _resourceService.CreateEditorViewModel(resource, resourceBytes);
                 }
                 else
                 {
-                    // prefer on-disk modified file if it exists
+                    // Для других типов ресурсов (GPL и т.д.) используем старую логику
                     byte[] gffBytes = container.Data;
                     if (!string.IsNullOrWhiteSpace(project.ModifiedGamePath))
                     {
@@ -91,10 +115,25 @@ namespace DarkSunRE
                     string resourceName = $"{resource.Tag}-{resource.Number}";
                     document = new GPLDocument(resourceBytes, docName, container.FullPath, container.Name, resourceName, project.TransliterationRules);
                     project.OpenedDocuments.Add(document);
+                    documentViewModel = new GplDocumentViewModel(document);
                 }
 
-                var documentViewModel = new GplDocumentViewModel(document);
-                var view = new GplDocumentView { DataContext = documentViewModel };
+                // Создаем представление в зависимости от типа вьюмодели
+                UserControl view = null;
+                if (documentViewModel is GplDocumentViewModel gplViewModel)
+                {
+                    view = new GplDocumentView { DataContext = gplViewModel };
+                }
+                else if (documentViewModel is ImageResourceViewModel imageViewModel)
+                {
+                    view = new ImageResourceView { DataContext = imageViewModel };
+                }
+                else
+                {
+                    // Для других типов ресурсов можно добавить соответствующие представления
+                    MessageBox.Show($"Unsupported resource type: {resource.Type}");
+                    return;
+                }
 
                 LayoutDocument layoutDocument = new LayoutDocument
                 {
@@ -102,16 +141,20 @@ namespace DarkSunRE
                     Content = view
                 };
 
+                // Подписываемся на события изменения свойств вьюмодели
                 documentViewModel.PropertyChanged += (o, args) =>
                 {
-                    if (args.PropertyName == nameof(GplDocumentViewModel.SelectedString) && documentViewModel.SelectedString != null)
+                    if (documentViewModel is GplDocumentViewModel gplDocViewModel)
                     {
-                        hvp.SetPosition(documentViewModel.SelectedString.StartPosition, documentViewModel.SelectedString.EndPosition);
-                    }
+                        if (args.PropertyName == nameof(GplDocumentViewModel.SelectedString) && gplDocViewModel.SelectedString != null)
+                        {
+                            hvp.SetPosition(gplDocViewModel.SelectedString.StartPosition, gplDocViewModel.SelectedString.EndPosition);
+                        }
 
-                    if (args.PropertyName == nameof(GplDocumentViewModel.NewBytes))
-                    {
-                        hvp.LoadBytes(documentViewModel.OriginalBytes, documentViewModel.NewBytes);
+                        if (args.PropertyName == nameof(GplDocumentViewModel.NewBytes))
+                        {
+                            hvp.LoadBytes(gplDocViewModel.OriginalBytes, gplDocViewModel.NewBytes);
+                        }
                     }
 
                     if (args.PropertyName == nameof(DocumentViewModel.DisplayTitle))
@@ -120,8 +163,11 @@ namespace DarkSunRE
                     }
                 };
 
-                // load into hex view
-                hvp.LoadBytes(documentViewModel.OriginalBytes, documentViewModel.NewBytes);
+                // Загружаем данные в hex view для GPL документов
+                if (documentViewModel is GplDocumentViewModel gplDocViewModel2)
+                {
+                    hvp.LoadBytes(gplDocViewModel2.OriginalBytes, gplDocViewModel2.NewBytes);
+                }
 
                 layoutDocumentPane.Children.Add(layoutDocument);
                 layoutDocument.IsActive = true;

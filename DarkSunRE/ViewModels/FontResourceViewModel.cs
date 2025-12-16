@@ -26,6 +26,8 @@ namespace DarkSunRE.ViewModels
         private Project _project;
         private ResourceInfo _resourceInfo;
         private Palette _selectedPalette;
+        private PaletteInfo _selectedPaletteInfo;
+        private ObservableCollection<PaletteInfo> _availablePalettes;
 
         public byte[] FontData
         {
@@ -48,15 +50,26 @@ namespace DarkSunRE.ViewModels
             }
         }
 
-        public Palette SelectedPalette
+        public PaletteInfo SelectedPaletteInfo
         {
-            get => _selectedPalette;
+            get => _selectedPaletteInfo;
             set
             {
-                _selectedPalette = value;
+                _selectedPaletteInfo = value;
+                _selectedPalette = value?.Palette;
                 OnPropertyChanged();
                 RenderAllCharacterImages(); // Re-render all characters with new palette
                 OnPropertyChanged(nameof(Characters)); // Notify that character images have changed
+            }
+        }
+
+        public ObservableCollection<PaletteInfo> AvailablePalettes
+        {
+            get => _availablePalettes;
+            set
+            {
+                _availablePalettes = value;
+                OnPropertyChanged();
             }
         }
 
@@ -81,8 +94,8 @@ namespace DarkSunRE.ViewModels
         // Свойства для управления размерами ячеек и шрифтов
         public double CellWidth => 80 * _scale;
         public double CellHeight => 100 * _scale;
-        public double CharacterFontSize => 14 * _scale;
-        public double TransliterationFontSize => 12 * _scale;
+        public double CharacterFontSize => 14 * Math.Sqrt(_scale); // Less aggressive scaling for text
+        public double TransliterationFontSize => 12 * Math.Sqrt(_scale); // Less aggressive scaling for text
 
         public ICommand ZoomInCommand => _zoomInCommand ?? (_zoomInCommand = new RelayCommand(ZoomIn));
         public ICommand ZoomOutCommand => _zoomOutCommand ?? (_zoomOutCommand = new RelayCommand(ZoomOut));
@@ -94,6 +107,7 @@ namespace DarkSunRE.ViewModels
             ToolTip = "Font Resource";
             CanClose = true;
             Characters = new ObservableCollection<FontCharacter>();
+            AvailablePalettes = new ObservableCollection<PaletteInfo>();
             _zoomInCommand = new RelayCommand(ZoomIn);
             _zoomOutCommand = new RelayCommand(ZoomOut);
             _resetZoomCommand = new RelayCommand(ResetZoom);
@@ -105,16 +119,27 @@ namespace DarkSunRE.ViewModels
             _resourceInfo = resourceInfo;
             FontData = fontData;
             
-            // Try to find a default palette from the project
-            FindDefaultPalette();
+            // Load available palettes from the project
+            LoadAvailablePalettes();
+            
+            // Set the first palette as default
+            if (AvailablePalettes.Count > 0)
+            {
+                SelectedPaletteInfo = AvailablePalettes[0];
+            }
         }
 
-        private void FindDefaultPalette()
+        private void LoadAvailablePalettes()
         {
             if (_project?.Files == null)
+            {
+                AvailablePalettes.Clear();
                 return;
+            }
 
-            // Look for the first available palette in the project
+            AvailablePalettes.Clear();
+
+            // Look for all available palettes in the project
             foreach (var file in _project.Files)
             {
                 if (file.Resources == null)
@@ -132,8 +157,15 @@ namespace DarkSunRE.ViewModels
                             
                             if (paletteData != null && paletteData.Length == 768) // PAL files usually 768 bytes
                             {
-                                SelectedPalette = Palette.FromPalData(paletteData);
-                                return;
+                                var palette = Palette.FromPalData(paletteData);
+                                var paletteInfo = new PaletteInfo
+                                {
+                                    Palette = palette,
+                                    Name = $"{resource.Tag}-{resource.Number}",
+                                    Tag = resource.Tag,
+                                    Number = resource.Number
+                                };
+                                AvailablePalettes.Add(paletteInfo);
                             }
                         }
                         catch (Exception ex)

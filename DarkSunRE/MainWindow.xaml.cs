@@ -132,6 +132,37 @@ namespace DarkSunRE
                         fontViewModel.Initialize(project, resource, resourceBytes);
                     }
                 }
+                else if (resource.Type == ResourceType.Name)
+                {
+                    // Для NAME ресурсов создаем NameResourceViewModel
+                    byte[] resourceBytes = null;
+                    
+                    // prefer on-disk modified file if it exists
+                    if (!string.IsNullOrWhiteSpace(project.ModifiedGamePath))
+                    {
+                        var modifiedPath = Path.Combine(project.ModifiedGamePath, container.Name);
+                        if (File.Exists(modifiedPath))
+                        {
+                            var gffBytes = File.ReadAllBytes(modifiedPath);
+                            var gff = _resourceService.ParseGffFile(gffBytes);
+                            resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
+                        }
+                    }
+                    
+                    if (resourceBytes == null)
+                    {
+                        var gff = _resourceService.ParseGffFile(container.Data);
+                        resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
+                    }
+                    
+                    documentViewModel = _resourceService.CreateEditorViewModel(resource, resourceBytes);
+                    
+                    // Для NAME ресурсов инициализируем вьюмодель с проектом и информацией о ресурсе
+                    if (documentViewModel is NameResourceViewModel nameResourceViewModel)
+                    {
+                        nameResourceViewModel.Initialize(_resourceService.DecodeResource(resource, resourceBytes) as NameResource, $"{resource.Tag}-{resource.Number}");
+                    }
+                }
                 else
                 {
                     // Для других типов ресурсов (GPL и т.д.) используем старую логику
@@ -146,11 +177,11 @@ namespace DarkSunRE
                     }
 
                     var gff = _resourceService.ParseGffFile(gffBytes);
-                    var resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
+                    var resourceData = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
 
                     string docName = $"{container.Name}:{resource.Tag}-{resource.Number}";
                     string resourceName = $"{resource.Tag}-{resource.Number}";
-                    document = new GPLDocument(resourceBytes, docName, container.FullPath, container.Name, resourceName, project.TransliterationRules);
+                    document = new GPLDocument(resourceData, docName, container.FullPath, container.Name, resourceName, project.TransliterationRules);
                     project.OpenedDocuments.Add(document);
                     documentViewModel = new GplDocumentViewModel(document);
                 }
@@ -168,6 +199,10 @@ namespace DarkSunRE
                 else if (documentViewModel is FontResourceViewModel fontViewModel)
                 {
                     view = new FontDisplayView { DataContext = fontViewModel };
+                }
+                else if (documentViewModel is NameResourceViewModel nameResourceViewModel)
+                {
+                    view = new NameResourceView { DataContext = nameResourceViewModel };
                 }
                 else
                 {

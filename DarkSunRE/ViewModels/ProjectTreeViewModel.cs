@@ -37,6 +37,7 @@ namespace DarkSunRE.ViewModels
         private bool _showAnimations = true;
         private bool _showRawData = true;
         private bool _showAnimationControls = true;
+        private bool _showNames = true;
         private bool _showUnknown = true;
 
         public ICommand NodeDoubleClickedCommand { get; }
@@ -234,6 +235,16 @@ namespace DarkSunRE.ViewModels
                 ApplyFilters();
             }
         }
+        
+        public bool ShowNames
+        {
+            get => _showNames;
+            set
+            {
+                SetProperty(ref _showNames, value);
+                ApplyFilters();
+            }
+        }
 
         private void SelectAllFilters()
         {
@@ -251,6 +262,7 @@ namespace DarkSunRE.ViewModels
             ShowAnimations = true;
             ShowRawData = true;
             ShowAnimationControls = true;
+            ShowNames = true;
             ShowUnknown = true;
         }
 
@@ -270,6 +282,7 @@ namespace DarkSunRE.ViewModels
             ShowAnimations = false;
             ShowRawData = false;
             ShowAnimationControls = false;
+            ShowNames = false;
             ShowUnknown = false;
         }
 
@@ -525,6 +538,7 @@ namespace DarkSunRE.ViewModels
                     ResourceType.Animation => ShowAnimations,
                     ResourceType.RawData => ShowRawData,
                     ResourceType.AnimationControl => ShowAnimationControls,
+                    ResourceType.Name => ShowNames,
                     ResourceType.Unknown => ShowUnknown,
                     _ => ShowUnknown // Для всех остальных нераспознанных типов
                 };
@@ -583,6 +597,9 @@ namespace DarkSunRE.ViewModels
                     break;
                 case "Unknown":
                     ShowUnknown = !ShowUnknown;
+                    break;
+                case "Names":
+                    ShowNames = !ShowNames;
                     break;
             }
         }

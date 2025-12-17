@@ -19,9 +19,10 @@ namespace DarkSunRE.Models
         Dialog,         // Диалоги
         Item,           // Предметы
         Character,      // Персонажи
-        Map,            // Карты        
+        Map,            // Карты
         Animation,      // Анимации
         RawData,         // Бинарные данные
-        AnimationControl
+        AnimationControl,
+        Name            // NAME ресурсы
     }
 }

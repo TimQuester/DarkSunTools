@@ -23,6 +23,7 @@ namespace DarkSunRE.Services
                 ResourceType.Image => true,
                 ResourceType.Palette => true,
                 ResourceType.Font => true,
+                ResourceType.Name => true,
                 ResourceType.RawData => false, // RawData редактируется как есть
                 _ => false
             };
@@ -37,6 +38,7 @@ namespace DarkSunRE.Services
                 ResourceType.Image => CreateImageResourceViewModel(resourceInfo, data),
                 ResourceType.Palette => CreatePaletteViewModel(resourceInfo, data),
                 ResourceType.Font => CreateFontResourceViewModel(resourceInfo, data),
+                ResourceType.Name => CreateNameResourceViewModel(resourceInfo, data),
                 _ => CreateRawDataViewModel(resourceInfo, data)
             };
         }
@@ -73,6 +75,7 @@ namespace DarkSunRE.Services
                 ResourceType.Animation => ".anm",
                 ResourceType.RawData => ".dat",
                 ResourceType.AnimationControl => ".acf",
+                ResourceType.Name => ".nam",
                 _ => ".dat"
             };
         }
@@ -125,6 +128,7 @@ namespace DarkSunRE.Services
                 ResourceType.Palette => DecodePaletteResource(data),
                 ResourceType.Font => DecodeFontResource(data),
                 ResourceType.Text => DecodeTextResource(data),
+                ResourceType.Name => DecodeNameResource(data),
                 _ => data // Для неизвестных типов возвращаем сырые данные
             };
         }
@@ -137,6 +141,7 @@ namespace DarkSunRE.Services
                 ResourceType.Palette => EncodePaletteResource(content),
                 ResourceType.Font => EncodeFontResource(content),
                 ResourceType.Text => EncodeTextResource(content),
+                ResourceType.Name => EncodeNameResource(content),
                 _ => content as byte[] ?? Array.Empty<byte>()
             };
         }
@@ -180,9 +185,10 @@ namespace DarkSunRE.Services
                 "PAL " or "CPAL" => ResourceType.Palette,
                 "FNT " or "FONT"=> ResourceType.Font,
                 "TEXT" or "MSG " or
-                "NAME" or "MERR" or
+                "MERR" or
                 "ETME" or "SPIN" or
                 "RNME" => ResourceType.Text,
+                "NAME" => ResourceType.Name,
                 "GPL " => ResourceType.Script,
                 "WAV " or "VOC " or
                 "BVOC" => ResourceType.Sound,
@@ -190,7 +196,7 @@ namespace DarkSunRE.Services
                 "CHR " => ResourceType.Character,
                 "RMAP" or "GMAP" => ResourceType.Map,
                 "ANM " or "BMA " => ResourceType.Animation,
-                "ACF " => ResourceType.AnimationControl,                
+                "ACF " => ResourceType.AnimationControl,
                 "PSEQ" or "CSEQ" or
                 "LSEQ" or "GSEQ" or
                 "FSEQ" => ResourceType.Music,
@@ -336,6 +342,16 @@ namespace DarkSunRE.Services
             // Для шрифтов возвращаем сырые данные
             return content as byte[] ?? Array.Empty<byte>();
         }
+        
+        private byte[] EncodeNameResource(object content)
+        {
+            // Для NAME ресурсов кодируем объект NameResource в байты
+            if (content is NameResource nameResource)
+            {
+                return nameResource.SaveToBytes();
+            }
+            return content as byte[] ?? Array.Empty<byte>();
+        }
 
         private byte[] EncodeTextResource(object content)
         {
@@ -372,6 +388,22 @@ namespace DarkSunRE.Services
             // Для шрифтов возвращаем сырые данные
             // Позже они будут обработаны специализированным редактором
             return data;
+        }
+        
+        private object DecodeNameResource(byte[] data)
+        {
+            // Для NAME ресурсов создаем объект NameResource
+            try
+            {
+                var nameResource = new NameResource();
+                nameResource.LoadFromBytes(data);
+                return nameResource;
+            }
+            catch
+            {
+                // В случае ошибки возвращаем сырые данные
+                return data;
+            }
         }
 
         #region CreateViewModels
@@ -415,7 +447,20 @@ namespace DarkSunRE.Services
         {
             // Реализация для неизвестных типов
             return new RawDataViewModel();
-        } 
+        }
+        
+        private DocumentViewModel CreateNameResourceViewModel(ResourceInfo resourceInfo, byte[] data)
+        {
+            // Реализация для NAME ресурсов
+            var viewModel = new NameResourceViewModel();
+            if (data != null)
+            {
+                var nameResource = new NameResource();
+                nameResource.LoadFromBytes(data);
+                viewModel.Initialize(nameResource, $"{resourceInfo.Tag}-{resourceInfo.Number}");
+            }
+            return viewModel;
+        }
         #endregion
         
         // Методы для работы с GFF файлами

@@ -54,6 +54,7 @@
                 <CheckBox Content="Animations" IsChecked="{Binding ShowAnimations}" Margin="5"/>
                 <CheckBox Content="Raw Data" IsChecked="{Binding ShowRawData}" Margin="5"/>
                 <CheckBox Content="Animation Controls" IsChecked="{Binding ShowAnimationControls}" Margin="5"/>
+                <CheckBox Content="Names" IsChecked="{Binding ShowNames}" Margin="5"/>
                 <CheckBox Content="Unknown" IsChecked="{Binding ShowUnknown}" Margin="5"/>
             </StackPanel>
         </Expander>

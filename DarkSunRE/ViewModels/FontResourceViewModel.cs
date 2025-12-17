@@ -28,6 +28,9 @@ namespace DarkSunRE.ViewModels
         private Palette _selectedPalette;
         private PaletteInfo _selectedPaletteInfo;
         private ObservableCollection<PaletteInfo> _availablePalettes;
+        private bool _isTransparent = false;
+        private const double Opacity = 0.5; // Постоянное значение прозрачности 50%
+        private const int TargetColorIndex = 20; // Цвет с индексом 20 будет полупрозрачным
 
         public byte[] FontData
         {
@@ -59,7 +62,6 @@ namespace DarkSunRE.ViewModels
                 _selectedPalette = value?.Palette;
                 OnPropertyChanged();
                 RenderAllCharacterImages(); // Re-render all characters with new palette
-                OnPropertyChanged(nameof(Characters)); // Notify that character images have changed
             }
         }
 
@@ -72,6 +74,18 @@ namespace DarkSunRE.ViewModels
                 OnPropertyChanged();
             }
         }
+        
+        public bool IsTransparent
+        {
+            get => _isTransparent;
+            set
+            {
+                _isTransparent = value;
+                OnPropertyChanged();
+                RenderAllCharacterImages(); // Re-render all characters with new transparency setting
+            }
+        }
+
 
         public double Scale
         {
@@ -85,12 +99,11 @@ namespace DarkSunRE.ViewModels
                 OnPropertyChanged(nameof(CellHeight));
                 OnPropertyChanged(nameof(CharacterFontSize));
                 OnPropertyChanged(nameof(TransliterationFontSize));
-                OnPropertyChanged(nameof(Characters)); // Notify that character images have changed
             }
         }
 
         public int ScalePercentage => (int)(_scale * 100);
-        
+
         // Свойства для управления размерами ячеек и шрифтов
         public double CellWidth => 80 * _scale;
         public double CellHeight => 100 * _scale;
@@ -221,11 +234,28 @@ namespace DarkSunRE.ViewModels
             if (Characters == null)
                 return;
 
-            // Only re-render images when scale changes, not on every property change
+            System.Diagnostics.Debug.WriteLine($"Rendering all character images, IsTransparent = {_isTransparent}");
+            int renderedCount = 0;
+
+            // Create new list of characters with updated images
+            var updatedCharacters = new List<FontCharacter>();
             foreach (var character in Characters)
             {
-                character.Image = RenderCharacterImage(character);
+                var updatedCharacter = new FontCharacter
+                {
+                    CharCode = character.CharCode,
+                    Width = character.Width,
+                    Pixels = character.Pixels,
+                    Transliteration = character.Transliteration,
+                    Image = RenderCharacterImage(character)
+                };
+                updatedCharacters.Add(updatedCharacter);
+                renderedCount++;
             }
+            
+            // Replace the entire collection to force UI update
+            Characters = new ObservableCollection<FontCharacter>(updatedCharacters);
+            System.Diagnostics.Debug.WriteLine($"Rendered {renderedCount} character images, IsTransparent = {_isTransparent}");
         }
 
         private void ZoomIn()
@@ -259,10 +289,14 @@ namespace DarkSunRE.ViewModels
                 int width = character.Width;
                 int height = 9; // Fixed height for font characters
                 
-                // Create pixel array for BitmapSource (at original size)
+                // Create WriteableBitmap
+                var bitmap = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
+                
+                // Create pixel array
                 var pixelData = new byte[width * height * 4]; // 4 bytes per pixel (BGRA)
 
                 // Fill pixels
+                int transparentPixels = 0;
                 for (int y = 0; y < height; y++)
                 {
                     for (int x = 0; x < width; x++)
@@ -271,8 +305,11 @@ namespace DarkSunRE.ViewModels
                         int pixelIndex = y * width + x;
                         int byteIndex = pixelIndex * 4; // 4 bytes per pixel (BGRA)
 
+                        // Check if this pixel should be transparent (black color = 0)
+                        bool isBackgroundPixel = (pixelValue == 0) && _isTransparent;
+
                         // Use palette or default grayscale
-                        byte red, green, blue;
+                        byte red, green, blue, alpha;
                         if (_selectedPalette != null && pixelValue < 256)
                         {
                             var color = _selectedPalette.GetColor((byte)pixelValue);
@@ -285,26 +322,35 @@ namespace DarkSunRE.ViewModels
                             // Default grayscale
                             red = green = blue = (byte)(pixelValue * 4);
                         }
+                        
+                        // Set alpha based on transparency setting
+                        // Apply opacity only to target color pixels
+                        if (pixelValue == TargetColorIndex && _isTransparent)
+                        {
+                            alpha = isBackgroundPixel ? (byte)0 : (byte)(255 * Opacity);
+                        }
+                        else
+                        {
+                            alpha = isBackgroundPixel ? (byte)0 : (byte)255;
+                        }
+                        if (alpha == 0) transparentPixels++;
 
                         // Write pixel to array (BGRA format)
                         pixelData[byteIndex] = blue;     // B
                         pixelData[byteIndex + 1] = green; // G
                         pixelData[byteIndex + 2] = red;   // R
-                        pixelData[byteIndex + 3] = 255;   // A (fully opaque)
+                        pixelData[byteIndex + 3] = alpha;   // A
                     }
                 }
+                
+                // Debug output
+                if (_isTransparent && transparentPixels > 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Character {character.CharCode} has {transparentPixels} transparent pixels");
+                }
 
-                // Create BitmapSource from pixel array
-                var bitmap = BitmapSource.Create(
-                    width,
-                    height,
-                    96, // DPI X
-                    96, // DPI Y
-                    PixelFormats.Bgra32,
-                    null, // palette
-                    pixelData,
-                    width * 4 // stride
-                );
+                // Write pixels to bitmap
+                bitmap.WritePixels(new System.Windows.Int32Rect(0, 0, width, height), pixelData, width * 4, 0);
 
                 return bitmap;
             }

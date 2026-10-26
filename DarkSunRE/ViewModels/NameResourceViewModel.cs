@@ -86,6 +86,17 @@ namespace DarkSunRE.ViewModels
             NameResource = nameResource;
             File = fileName;
             IsModified = false;
+            
+            // Устанавливаем заголовок в формате "имя файла: наименование ресурса"
+            var parts = fileName.Split(':');
+            if (parts.Length == 2)
+            {
+                Title = $"{parts[0]}: {parts[1]}";
+            }
+            else
+            {
+                Title = fileName;
+            }
         }
 
         private void AddEntry()

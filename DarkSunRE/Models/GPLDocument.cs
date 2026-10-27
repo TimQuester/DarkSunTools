@@ -1,12 +1,13 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using DarkSunRE.Models;
+using DSunTools.Common.Gpl;
 
 namespace DarkSunRE.Models
-{    
+{
     public class GPLDocument
     {
         public string Name { get; }
@@ -18,7 +19,17 @@ namespace DarkSunRE.Models
         public List<GPLString> decodedStrings { get; set; } = new List<GPLString>();
         public List<TransliterationRule> TransliterationRules { get; set; } = new();
 
-        public GPLDocument(byte[] resourceBytes, string name, string path = null, string fileName = null, string resourceName = null, List<TransliterationRule> transliterationRules = null)
+        /// <summary>Set when the instruction walker could not consume the whole chunk.</summary>
+        public string ParseError { get; private set; }
+        public bool ParseAligned { get; private set; }
+
+        public GPLDocument(
+            byte[] resourceBytes,
+            string name,
+            string path = null,
+            string fileName = null,
+            string resourceName = null,
+            List<TransliterationRule> transliterationRules = null)
         {
             Name = name;
             Path = path ?? name;
@@ -41,86 +52,45 @@ namespace DarkSunRE.Models
             ApplyStringChanges();
         }
 
-        // --- Decoding / Encoding implementation (ported and adapted from TextTools) ---
+        // --- Decoding / encoding -------------------------------------------------
 
-        private static List<GPLString> DecodeToGPLStrings(byte[] bytes)
+        private List<GPLString> DecodeToGPLStrings(byte[] bytes)
         {
             var result = new List<GPLString>();
-            if (bytes == null || bytes.Length == 0) return result;
-
-            const int TextBufferSize = 4096;
-            int position = 0;
-            int stringIndex = 0;
-
-            while (position < bytes.Length)
+            if (bytes == null || bytes.Length == 0)
             {
-                if (bytes[position] == 0x05)
+                ParseAligned = true;
+                return result;
+            }
+
+            GplParseResult parsed = GplChunkParser.Parse(bytes);
+            ParseAligned = parsed.Aligned;
+            ParseError = parsed.Error;
+
+            int stringIndex = 0;
+            foreach (GplStringSpan span in parsed.Strings)
+            {
+                if (span.SubType == GplStringSubType.Introduce)
+                    continue; // INTRODUCE has no editable payload.
+
+                string decoded = span.Text ?? string.Empty;
+                var gpl = new GPLString
                 {
-                    int markerIndex = position;
-                    position++; // move to content
-                    int contentStart = position;
-                    var textBuffer = new byte[TextBufferSize];
-                    int strPos = 0;
-                    int currentChar = 0;
-                    int currentRShift = 1;
-                    bool endOfString = false;
+                    StringNumber = stringIndex++,
+                    StartPosition = span.ContentStart,
+                    EndPosition = span.ContentLength > 0
+                        ? span.ContentStart + span.ContentLength - 1
+                        : span.ContentStart - 1,
+                    EncodedLength = span.ContentLength,
+                    SubType = span.SubType,
+                    OriginalString = decoded,
+                    NewString = decoded,
+                    RealString = !string.IsNullOrWhiteSpace(decoded),
+                    OriginalBytes = ExtractRange(bytes, span.ContentStart, span.ContentLength),
+                    NewBytes = ExtractRange(bytes, span.ContentStart, span.ContentLength),
+                };
 
-                    while (position < bytes.Length && strPos < TextBufferSize - 1 && !endOfString)
-                    {
-                        if (currentRShift > 0)
-                        {
-                            currentChar = (currentChar << 8) | bytes[position++];
-                        }
-
-                        int decodedChar = (currentChar >> currentRShift) & 0x7F;
-                        textBuffer[strPos] = (byte)decodedChar;
-
-                        if (textBuffer[strPos] == 0x03)
-                        {
-                            textBuffer[strPos] = 0;
-                            endOfString = true;
-                            break;
-                        }
-
-                        // replace control characters with space where appropriate
-                        if (textBuffer[strPos] < 0x20 &&
-                            textBuffer[strPos] != '\t' &&
-                            textBuffer[strPos] != '\n' &&
-                            textBuffer[strPos] != '\r')
-                        {
-                            textBuffer[strPos] = 0x20;
-                        }
-
-                        strPos++;
-                        currentRShift++;
-
-                        if (currentRShift > 7)
-                        {
-                            currentRShift = 0;
-                        }
-                    }
-
-                    int contentEndExclusive = position;
-                    var decoded = Encoding.ASCII.GetString(textBuffer, 0, strPos);
-
-                    var gpl = new GPLString
-                    {
-                        StringNumber = stringIndex++,
-                        StartPosition = contentStart,
-                        EndPosition = Math.Max(contentStart, contentEndExclusive - 1),
-                        OriginalString = decoded,
-                        NewString = decoded,
-                        RealString = !string.IsNullOrWhiteSpace(decoded),
-                        OriginalBytes = ExtractRange(bytes, contentStart, contentEndExclusive - contentStart),
-                        NewBytes = ExtractRange(bytes, contentStart, contentEndExclusive - contentStart)
-                    };
-
-                    result.Add(gpl);
-                }
-                else
-                {
-                    position++;
-                }
+                result.Add(gpl);
             }
 
             return result;
@@ -137,136 +107,104 @@ namespace DarkSunRE.Models
             return outb;
         }
 
-        private static byte[] ApplyStringChangesToBytes(byte[] originalBytes, List<GPLString> strings, List<TransliterationRule> transliterationRules)
+        private static byte[] ApplyStringChangesToBytes(
+            byte[] originalBytes,
+            List<GPLString> strings,
+            List<TransliterationRule> transliterationRules)
         {
             if (originalBytes == null) return Array.Empty<byte>();
-            var newBytesList = new List<byte>(originalBytes);
-            int stringIndex = 0;
-            int position = 0;
 
-            while (position < newBytesList.Count && stringIndex < strings.Count)
+            var result = (byte[])originalBytes.Clone();
+
+            // Since every edit is fixed-length, order is not strictly
+            // important; descend anyway so a malformed span cannot move
+            // a later span's start.
+            foreach (GPLString gpl in strings
+                         .Where(s => s != null && s.IsEditable)
+                         .OrderByDescending(s => s.StartPosition))
             {
-                if (newBytesList[position] == 0x05)
+                string originalString = gpl.OriginalString ?? string.Empty;
+                string newString = gpl.NewString ?? string.Empty;
+
+                if (transliterationRules != null && transliterationRules.Count > 0)
+                    newString = ApplyTransliteration(newString, transliterationRules);
+
+                if (string.Equals(originalString, newString, StringComparison.Ordinal))
+                    continue;
+
+                if (newString.Length != originalString.Length)
                 {
-                    int markerPos = position;
-                    position++;
-                    int blockStart = position;
-
-                    int blockEnd = position;
-                    while (blockEnd < newBytesList.Count && newBytesList[blockEnd] != 0x05)
-                        blockEnd++;
-
-                    int originalBlockSize = blockEnd - blockStart;
-
-                    var gpl = strings[stringIndex];
-                    string originalString = gpl.OriginalString ?? string.Empty;
-                    string newString = gpl.NewString ?? string.Empty;
-
-                    if (transliterationRules != null && transliterationRules.Count > 0)
-                    {
-                        newString = ApplyTransliteration(newString, transliterationRules);
-                    }
-
-                    if (!string.Equals(originalString, newString, StringComparison.Ordinal))
-                    {
-                        var encoded = EncodeStringWithFixedSize(newString, originalBlockSize);
-                        // replace block preserving marker
-                        newBytesList.RemoveRange(blockStart, originalBlockSize);
-                        newBytesList.InsertRange(blockStart, encoded);
-                        position = blockStart + encoded.Length;
-                    }
-                    else
-                    {
-                        position = blockEnd;
-                    }
-
-                    stringIndex++;
+                    throw new InvalidOperationException(
+                        $"GPL string #{gpl.StringNumber} at 0x{gpl.StartPosition:X}: " +
+                        $"length {newString.Length} != original {originalString.Length}. " +
+                        "Fixed-length mode refuses to resize a span.");
                 }
-                else
+
+                int encodedLength = gpl.EncodedLength;
+                if (encodedLength <= 0 && gpl.OriginalBytes != null)
+                    encodedLength = gpl.OriginalBytes.Length;
+                if (encodedLength <= 0 && gpl.EndPosition >= gpl.StartPosition)
+                    encodedLength = gpl.EndPosition - gpl.StartPosition + 1;
+                if (encodedLength <= 0)
+                    encodedLength = GplStringCodec.PackedLength(originalString.Length);
+
+                int minimal = GplStringCodec.PackedLength(newString.Length);
+                if (minimal > encodedLength)
                 {
-                    position++;
+                    throw new InvalidOperationException(
+                        $"GPL string #{gpl.StringNumber} at 0x{gpl.StartPosition:X}: " +
+                        $"needs {minimal} bytes but the original span is {encodedLength}.");
                 }
+
+                if (gpl.StartPosition < 0 ||
+                    gpl.StartPosition + encodedLength > result.Length)
+                {
+                    throw new InvalidOperationException(
+                        $"GPL string #{gpl.StringNumber}: span 0x{gpl.StartPosition:X} " +
+                        $"+{encodedLength} is outside the chunk.");
+                }
+
+                byte[] encoded = GplStringCodec.PackCompressed(newString, encodedLength);
+                Buffer.BlockCopy(encoded, 0, result, gpl.StartPosition, encoded.Length);
+                gpl.NewBytes = encoded;
             }
 
-            return newBytesList.ToArray();
+            if (result.Length != originalBytes.Length)
+            {
+                throw new InvalidOperationException(
+                    "Fixed-length apply changed the chunk size; this must never happen.");
+            }
+
+            return result;
         }
 
+        /// <summary>
+        /// One-pass, one-character-to-one-character transliteration.
+        /// Multi-character rules are ignored here: they cannot preserve
+        /// the fixed-length invariant. (They remain useful for previews.)
+        /// </summary>
         private static string ApplyTransliteration(string input, List<TransliterationRule> rules)
         {
             if (string.IsNullOrEmpty(input) || rules == null || rules.Count == 0)
                 return input;
 
-            string result = input;
-            foreach (var rule in rules)
+            var map = new Dictionary<char, char>();
+            foreach (TransliterationRule rule in rules)
             {
                 if (rule == null) continue;
-                var from = rule.From ?? string.Empty;
-                var to = rule.To ?? string.Empty;
-                if (from.Length == 0) continue;
-                result = result.Replace(from, to);
-            }
-            return result;
-        }
-
-        private static byte[] EncodeStringWithFixedSize(string str, int targetSize)
-        {
-            int contentSize = Math.Max(0, targetSize - 1);
-            string adjustedStr = str.Length > contentSize
-                ? str.Substring(0, contentSize)
-                : str.PadRight(contentSize, ' ');
-
-            var encodedBytes = new List<byte>();
-            int bitBuffer = 0;
-            int bitsInBuffer = 0;
-
-            foreach (char c in adjustedStr)
-            {
-                byte charByte = (byte)c;
-                if (charByte < 0x20 && charByte != 0) charByte = 0x20;
-
-                bitBuffer |= (charByte & 0x7F) << bitsInBuffer;
-                bitsInBuffer += 7;
-
-                while (bitsInBuffer >= 8)
-                {
-                    encodedBytes.Add((byte)(bitBuffer & 0xFF));
-                    bitBuffer >>= 8;
-                    bitsInBuffer -= 8;
-                }
+                string from = rule.From ?? string.Empty;
+                string to = rule.To ?? string.Empty;
+                if (from.Length == 1 && to.Length == 1)
+                    map[from[0]] = to[0];
             }
 
-            // terminator 0x03
-            bitBuffer |= (0x03 & 0x7F) << bitsInBuffer;
-            bitsInBuffer += 7;
-            while (bitsInBuffer >= 8)
-            {
-                encodedBytes.Add((byte)(bitBuffer & 0xFF));
-                bitBuffer >>= 8;
-                bitsInBuffer -= 8;
-            }
+            if (map.Count == 0)
+                return input;
 
-            if (bitsInBuffer > 0)
-            {
-                encodedBytes.Add((byte)(bitBuffer & 0xFF));
-            }
-
-            if (encodedBytes.Count > targetSize)
-            {
-                encodedBytes = encodedBytes.Take(targetSize).ToList();
-            }
-            else if (encodedBytes.Count < targetSize)
-            {
-                if (!encodedBytes.Contains(0x03))
-                {
-                    encodedBytes.Add(0x03);
-                }
-                while (encodedBytes.Count < targetSize)
-                {
-                    encodedBytes.Add(0);
-                }
-            }
-
-            return encodedBytes.ToArray();
+            var sb = new StringBuilder(input.Length);
+            foreach (char c in input)
+                sb.Append(map.TryGetValue(c, out char replacement) ? replacement : c);
+            return sb.ToString();
         }
     }
 }

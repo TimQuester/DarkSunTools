@@ -51,15 +51,25 @@ namespace Dsun.Common.Tests
         }
 
         [Fact]
-        public void Padding_AfterTerminator_IsAllowed()
+        public void Decode_StopsAtTerminator_EvenWithTrailingBytes()
         {
-            byte[] packed = GplStringCodec.PackCompressed("Hi", 8);
-            Assert.Equal(8, packed.Length);
+            // "Hi" followed by zero bytes. The decoder must stop at 0x03
+            // and report how many bytes the string actually occupies.
+            byte[] packed = { 0x91, 0xA4, 0x18, 0x00, 0x00 };
 
             Assert.True(GplStringCodec.TryDecodeCompressed(
                 packed, 0, out string decoded, out int consumed, out _));
             Assert.Equal("Hi", decoded);
-            Assert.Equal(3, consumed); // decoder stops at 0x03, ignores padding
+            Assert.Equal(3, consumed);
+        }
+
+        [Fact]
+        public void Pack_RejectsPadding()
+        {
+            // GPL strings are inline: bytes after 0x03 are executed as
+            // opcodes, so a padded packing would corrupt the chunk.
+            Assert.Throws<ArgumentException>(() =>
+                GplStringCodec.PackCompressed("Hi", 8));
         }
 
         [Fact]

@@ -46,7 +46,7 @@
             <Button Grid.Column="1" Content="Browse..." Command="{Binding BrowseJsonCommand}" Margin="5"/>
         </Grid>
 
-        <TextBlock Text="Transliteration table ('from=to' separated by ';'):" Grid.Row="6" FontWeight="Bold" Margin="0,8,0,0"/>
+        <TextBlock Text="Transliteration table ('game glyph=displayed character', ';'-separated, e.g. A=А):" Grid.Row="6" FontWeight="Bold" Margin="0,8,0,0"/>
         <TextBox Grid.Row="7" Margin="0,4,0,0" Text="{Binding TransliterationTableText}" AcceptsReturn="False" VerticalScrollBarVisibility="Auto" TextWrapping="WrapWithOverflow" Height="80"/>
 
         <StackPanel Grid.Row="8" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,0" Height="32" VerticalAlignment="Bottom">

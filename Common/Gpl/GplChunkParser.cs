@@ -338,7 +338,15 @@ namespace DSunTools.Common.Gpl
                                 int n = ReadParams(ctx, inner, pos, retvalDepth + 1, out bool be);
                                 pos += n;
                                 bestEffort |= be;
-                                if (n == 0) { bestEffort = true; goto done; }
+                                // Zero-parameter opcodes (e.g. gpl getyn,
+                                // 0x38) are legal inside RETVAL; only a
+                                // handler that failed to consume a
+                                // non-empty parameter list is an error.
+                                if (n == 0 && GplOpcodeTable.Get(inner).Kind != GplParamKind.None)
+                                {
+                                    bestEffort = true;
+                                    goto done;
+                                }
                                 break;
                             }
 

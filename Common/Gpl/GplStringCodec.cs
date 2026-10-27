@@ -18,8 +18,9 @@ namespace DSunTools.Common.Gpl
     /// One string found inside a GPL/MAS chunk.
     /// <see cref="ContentStart"/> points at the first payload byte
     /// (the byte after the sub-type marker); <see cref="ContentLength"/>
-    /// is the number of bytes that belong to the payload, including
-    /// the terminator and any trailing padding.
+    /// is the number of payload bytes through the 0x03 terminator.
+    /// There is no padding: the next instruction starts right after
+    /// the byte containing the terminator.
     /// </summary>
     public sealed record GplStringSpan(
         int SubTypeOffset,
@@ -182,8 +183,12 @@ namespace DSunTools.Common.Gpl
 
         /// <summary>
         /// Pack <paramref name="text"/> into exactly <paramref name="targetLength"/> bytes.
-        /// The target must be at least <see cref="PackedLength"/>; the remaining
-        /// bytes are zero padding after the terminator (the game stops at 0x03).
+        ///
+        /// The length must be exactly <see cref="PackedLength"/> for the text:
+        /// GPL strings are inline in the instruction stream and the next
+        /// instruction starts right after the 0x03 terminator. Padding after
+        /// the terminator would therefore be executed as opcodes, so it is
+        /// rejected instead of silently corrupting the chunk.
         /// </summary>
         public static byte[] PackCompressed(string text, int targetLength)
         {
@@ -191,10 +196,11 @@ namespace DSunTools.Common.Gpl
             if (targetLength <= 0) throw new ArgumentOutOfRangeException(nameof(targetLength));
 
             int minimal = PackedLength(text.Length);
-            if (minimal > targetLength)
+            if (minimal != targetLength)
             {
                 throw new ArgumentException(
-                    $"text needs {minimal} bytes but only {targetLength} are available",
+                    $"text needs exactly {minimal} bytes but the target is {targetLength}; " +
+                    "GPL strings cannot be padded",
                     nameof(targetLength));
             }
 
@@ -231,9 +237,6 @@ namespace DSunTools.Common.Gpl
 
             if (bits > 0)
                 bytes.Add((byte)((buffer << (8 - bits)) & 0xFF));
-
-            while (bytes.Count < targetLength)
-                bytes.Add(0);
 
             return bytes.ToArray();
         }

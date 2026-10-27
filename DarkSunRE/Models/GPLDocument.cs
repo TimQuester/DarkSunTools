@@ -1,9 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text;
-using DarkSunRE.Models;
 using DSunTools.Common.Gpl;
 
 namespace DarkSunRE.Models
@@ -20,7 +17,7 @@ namespace DarkSunRE.Models
         public List<TransliterationRule> TransliterationRules { get; set; } = new();
 
         /// <summary>Set when the instruction walker could not consume the whole chunk.</summary>
-        public string ParseError { get; private set; }
+        public string? ParseError { get; private set; }
         public bool ParseAligned { get; private set; }
 
         public GPLDocument(
@@ -126,8 +123,16 @@ namespace DarkSunRE.Models
                 string originalString = gpl.OriginalString ?? string.Empty;
                 string newString = gpl.NewString ?? string.Empty;
 
-                if (transliterationRules != null && transliterationRules.Count > 0)
-                    newString = ApplyTransliteration(newString, transliterationRules);
+                // The rules are stored as "game glyph = displayed
+                // character" (the font preview shows them that way), so
+                // encoding a Cyrillic translation goes through the
+                // reverse map.
+                newString = GplTransliteration.EncodeToGameCharset(
+                    newString,
+                    transliterationRules?
+                        .Where(r => r != null)
+                        .Select(r => new GplTransliterationRule(r.From ?? string.Empty, r.To ?? string.Empty))
+                        .ToList());
 
                 if (string.Equals(originalString, newString, StringComparison.Ordinal))
                     continue;
@@ -137,7 +142,19 @@ namespace DarkSunRE.Models
                     throw new InvalidOperationException(
                         $"GPL string #{gpl.StringNumber} at 0x{gpl.StartPosition:X}: " +
                         $"length {newString.Length} != original {originalString.Length}. " +
-                        "Fixed-length mode refuses to resize a span.");
+                        "Fixed-length mode refuses to resize a span. " +
+                        "Use a translation of the same character count (pad with spaces if needed).");
+                }
+
+                for (int i = 0; i < newString.Length; i++)
+                {
+                    char bad = newString[i];
+                    if (bad <= 0x7F) continue;
+
+                    throw new InvalidOperationException(
+                        $"GPL string #{gpl.StringNumber} at 0x{gpl.StartPosition:X}: " +
+                        $"character U+{(int)bad:X4} '{bad}' has no 7-bit mapping. " +
+                        "Add a transliteration rule (game glyph=displayed character).");
                 }
 
                 int encodedLength = gpl.EncodedLength;
@@ -149,11 +166,17 @@ namespace DarkSunRE.Models
                     encodedLength = GplStringCodec.PackedLength(originalString.Length);
 
                 int minimal = GplStringCodec.PackedLength(newString.Length);
-                if (minimal > encodedLength)
+                if (minimal != encodedLength)
                 {
+                    // Same character count implies the same packed byte
+                    // count. A mismatch means the span metadata is wrong
+                    // (for example a hand-edited JSON); refusing here is
+                    // safer than writing padding, because zero padding
+                    // would be executed as the next GPL opcode.
                     throw new InvalidOperationException(
                         $"GPL string #{gpl.StringNumber} at 0x{gpl.StartPosition:X}: " +
-                        $"needs {minimal} bytes but the original span is {encodedLength}.");
+                        $"span is {encodedLength} bytes but {newString.Length} characters need {minimal}. " +
+                        "The span metadata does not match the fixed-length string.");
                 }
 
                 if (gpl.StartPosition < 0 ||
@@ -176,35 +199,6 @@ namespace DarkSunRE.Models
             }
 
             return result;
-        }
-
-        /// <summary>
-        /// One-pass, one-character-to-one-character transliteration.
-        /// Multi-character rules are ignored here: they cannot preserve
-        /// the fixed-length invariant. (They remain useful for previews.)
-        /// </summary>
-        private static string ApplyTransliteration(string input, List<TransliterationRule> rules)
-        {
-            if (string.IsNullOrEmpty(input) || rules == null || rules.Count == 0)
-                return input;
-
-            var map = new Dictionary<char, char>();
-            foreach (TransliterationRule rule in rules)
-            {
-                if (rule == null) continue;
-                string from = rule.From ?? string.Empty;
-                string to = rule.To ?? string.Empty;
-                if (from.Length == 1 && to.Length == 1)
-                    map[from[0]] = to[0];
-            }
-
-            if (map.Count == 0)
-                return input;
-
-            var sb = new StringBuilder(input.Length);
-            foreach (char c in input)
-                sb.Append(map.TryGetValue(c, out char replacement) ? replacement : c);
-            return sb.ToString();
         }
     }
 }

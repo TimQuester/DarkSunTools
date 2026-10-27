@@ -44,7 +44,9 @@ namespace Dsun.Common.Tests
             Assert.True(result.Aligned, result.Error);
             Assert.Single(result.Strings);
             Assert.Equal("Hi", result.Strings[0].Text);
-            Assert.Equal(4, result.Strings[0].SubTypeOffset);
+            // 0x05 0x00 0x01 occupies three bytes, so the string
+            // sub-type marker follows at offset 7.
+            Assert.Equal(7, result.Strings[0].SubTypeOffset);
         }
 
         [Fact]
@@ -60,6 +62,27 @@ namespace Dsun.Common.Tests
             Assert.Equal(0x2C, result.Strings[0].Opcode);
             Assert.Equal(1, result.Strings[0].SubTypeOffset);
             Assert.Equal("Hi", result.Strings[0].Text);
+        }
+
+        [Fact]
+        public void LoadAccumWithZeroParameterRetval_StaysAligned()
+        {
+            // 18 E2 8C 38 E1 -> gpl load accum ( gpl getyn )
+            // gpl getyn takes no parameters, which is legal inside RETVAL.
+            // Then the print-string instruction must still be reached.
+            var chunk = new byte[]
+            {
+                0x18, 0xE2, 0x8C, 0x38, 0xE1,
+                0x4F, 0x00, 0x00, 0x92, 0x05, 0x91, 0xA4, 0x18,
+                0x31,
+            };
+
+            GplParseResult result = GplChunkParser.Parse(chunk);
+
+            Assert.True(result.Aligned, result.Error);
+            Assert.Single(result.Strings);
+            Assert.Equal("Hi", result.Strings[0].Text);
+            Assert.Equal(0x4F, result.Strings[0].Opcode);
         }
 
         [Fact]

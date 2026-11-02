@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using DSunTools.Common.Gpl;
 
@@ -13,7 +14,7 @@ namespace DarkSunRE.Models
     {
         private string _newString;
         private int _newSize;
-        private bool _realString;
+        private string _validationError;
 
         public int StringNumber { get; set; }
 
@@ -22,7 +23,7 @@ namespace DarkSunRE.Models
 
         public int EndPosition { get; set; }
 
-        /// <summary>Number of payload bytes, including terminator/padding.</summary>
+        /// <summary>Number of payload bytes, through the terminator.</summary>
         public int EncodedLength { get; set; }
 
         public GplStringSubType SubType { get; set; } = GplStringSubType.Compressed;
@@ -42,6 +43,36 @@ namespace DarkSunRE.Models
 
         public bool IsOverlong => NewString != null && NewString.Length > MaxLength;
 
+        [JsonIgnore]
+        public bool IsUnderlong => NewString != null && NewString.Length < MaxLength;
+
+        [JsonIgnore]
+        public bool HasLengthMismatch => NewString != null && NewString.Length != MaxLength;
+
+        /// <summary>Current and maximum character counts for the editor.</summary>
+        [JsonIgnore]
+        public string LengthDisplay => $"{NewSize}/{MaxLength}";
+
+        /// <summary>
+        /// Per-string validation message produced by the document. Null when
+        /// the string can be encoded without losing the fixed-length layout.
+        /// </summary>
+        [JsonIgnore]
+        public string ValidationError
+        {
+            get => _validationError;
+            set
+            {
+                if (string.Equals(_validationError, value, StringComparison.Ordinal)) return;
+                _validationError = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasValidationError));
+            }
+        }
+
+        [JsonIgnore]
+        public bool HasValidationError => !string.IsNullOrEmpty(_validationError);
+
         public string NewString
         {
             get => _newString;
@@ -51,6 +82,8 @@ namespace DarkSunRE.Models
                 NewSize = _newString != null ? _newString.Length : 0;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsOverlong));
+                OnPropertyChanged(nameof(IsUnderlong));
+                OnPropertyChanged(nameof(HasLengthMismatch));
             }
         }
 
@@ -61,16 +94,7 @@ namespace DarkSunRE.Models
             {
                 _newSize = value;
                 OnPropertyChanged();
-            }
-        }
-
-        public bool RealString
-        {
-            get => _realString;
-            set
-            {
-                _realString = value;
-                OnPropertyChanged();
+                OnPropertyChanged(nameof(LengthDisplay));
             }
         }
 

@@ -3,10 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:converters="clr-namespace:DarkSunRE.Converters"
              mc:Ignorable="d"
              d:DesignHeight="450"
              d:DesignWidth="800">
     <UserControl.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+
         <DataTemplate x:Key="VerticalStringsTemplate">
             <Grid>
                 <Grid.RowDefinitions>
@@ -28,36 +31,68 @@
                              Background="Transparent"
                              BorderThickness="1"
                              Padding="2,0" TextWrapping="WrapWithOverflow"
-                             MaxWidth="600"/>
-                <TextBlock Text="{Binding NewSize, UpdateSourceTrigger=PropertyChanged}" Padding="2" Grid.Column="1" Grid.Row="1"/>
+                             MaxWidth="600"
+                             ToolTip="{Binding ValidationError}"/>
+                <TextBlock Text="{Binding LengthDisplay}"
+                           Padding="2" Grid.Column="1" Grid.Row="1"
+                           ToolTip="Current length / maximum length">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasValidationError}" Value="True">
+                                    <Setter Property="Foreground" Value="#FFB00020" />
+                                    <Setter Property="FontWeight" Value="Bold" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
             </Grid>
         </DataTemplate>
-        <Style x:Key="GrayedOutRowStyle" TargetType="DataGridRow">
+
+        <Style x:Key="StringRowStyle" TargetType="DataGridRow">
             <Style.Triggers>
-                <DataTrigger Binding="{Binding RealString}" Value="False">
-                    <Setter Property="Foreground" Value="Gray" />
-                    <Setter Property="Opacity" Value="0.7" />
-                    <Setter Property="Background" Value="#FFF0F0F0" />
+                <DataTrigger Binding="{Binding HasValidationError}" Value="True">
+                    <Setter Property="Background" Value="#FFFFE4E4" />
+                    <Setter Property="ToolTip" Value="{Binding ValidationError}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
     </UserControl.Resources>
 
-    <DataGrid x:Name="StringsGrid"
-              ItemsSource="{Binding Strings}"
-              SelectedItem="{Binding SelectedString, Mode=TwoWay}"
-              AutoGenerateColumns="False"
-              CanUserAddRows="False"
-              CanUserDeleteRows="False"
-              CanUserReorderColumns="False"
-              CanUserSortColumns="False"
-              RowStyle="{StaticResource GrayedOutRowStyle}">
-        <DataGrid.Columns>
-            <DataGridTextColumn Header="#" Binding="{Binding StringNumber}" />
-            <DataGridTextColumn Header="Start" Binding="{Binding StartPosition}" />
-            <DataGridTextColumn Header="End" Binding="{Binding EndPosition}" />
-            <DataGridTemplateColumn Header="Strings" CellTemplate="{StaticResource VerticalStringsTemplate}" Width="630"/>
-            <DataGridCheckBoxColumn Header="Real" Binding="{Binding RealString}" />
-        </DataGrid.Columns>
-    </DataGrid>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                Background="#FFFFF4CE"
+                BorderBrush="#FFE0B84C"
+                BorderThickness="0,0,0,1"
+                Padding="8,6"
+                Visibility="{Binding HasValidationErrors, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="{Binding ValidationSummary}"
+                       TextWrapping="Wrap"
+                       Foreground="#FF6B4E00" />
+        </Border>
+
+        <DataGrid Grid.Row="1"
+                  x:Name="StringsGrid"
+                  ItemsSource="{Binding Strings}"
+                  SelectedItem="{Binding SelectedString, Mode=TwoWay}"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  CanUserReorderColumns="False"
+                  CanUserSortColumns="False"
+                  RowStyle="{StaticResource StringRowStyle}">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="#" Binding="{Binding StringNumber}" />
+                <DataGridTextColumn Header="Start" Binding="{Binding StartPosition}" />
+                <DataGridTextColumn Header="End" Binding="{Binding EndPosition}" />
+                <DataGridTemplateColumn Header="Strings" CellTemplate="{StaticResource VerticalStringsTemplate}" Width="630"/>
+            </DataGrid.Columns>
+        </DataGrid>
+    </Grid>
 </UserControl>

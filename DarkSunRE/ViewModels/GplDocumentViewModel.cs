@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -12,6 +13,8 @@ namespace DarkSunRE.ViewModels
     {
         private readonly GPLDocument _document;
         private GPLString _selectedString;
+        private readonly List<GplValidationIssue> _validationIssues = new();
+        private string _validationSummary = string.Empty;
 
         private class GplJsonFile
         {
@@ -30,6 +33,8 @@ namespace DarkSunRE.ViewModels
             CanClose = true;
 
             Strings = new ObservableCollection<GPLString>(document.decodedStrings ?? new List<GPLString>());
+            AttachStrings();
+            RefreshValidation();
         }
 
         public ObservableCollection<GPLString> Strings { get; }
@@ -51,14 +56,108 @@ namespace DarkSunRE.ViewModels
         public string FileName => _document.FileName;
         public string ResourceName => _document.ResourceName;
 
+        public bool ParseAligned => _document.ParseAligned;
+        public string ParseError => _document.ParseError ?? string.Empty;
+
+        public bool HasValidationErrors => _validationIssues.Count > 0;
+        public int ValidationErrorCount => _validationIssues.Count;
+        public string ValidationSummary => _validationSummary;
+        public bool CanSave => !HasValidationErrors;
+
+        private void AttachStrings()
+        {
+            foreach (GPLString str in Strings)
+            {
+                if (str != null)
+                    str.PropertyChanged += OnStringPropertyChanged;
+            }
+        }
+
+        private void DetachStrings()
+        {
+            foreach (GPLString str in Strings)
+            {
+                if (str != null)
+                    str.PropertyChanged -= OnStringPropertyChanged;
+            }
+        }
+
+        private void OnStringPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(GPLString.NewString))
+                RefreshValidation();
+        }
+
+        /// <summary>
+        /// Re-run the same validation the encoder uses and push per-string
+        /// messages back to the grid. Called on load and after every edit.
+        /// </summary>
+        public void RefreshValidation()
+        {
+            _document.decodedStrings = Strings.Where(s => s != null).ToList();
+
+            _validationIssues.Clear();
+            _validationIssues.AddRange(_document.Validate());
+
+            var messagesByString = _validationIssues
+                .Where(i => i.StringNumber >= 0)
+                .GroupBy(i => i.StringNumber)
+                .ToDictionary(g => g.Key, g => g.First().Message);
+
+            foreach (GPLString str in Strings)
+            {
+                if (str == null) continue;
+                str.ValidationError = messagesByString.TryGetValue(str.StringNumber, out string message)
+                    ? message
+                    : null;
+            }
+
+            _validationSummary = BuildValidationSummary();
+
+            OnPropertyChanged(nameof(HasValidationErrors));
+            OnPropertyChanged(nameof(ValidationErrorCount));
+            OnPropertyChanged(nameof(ValidationSummary));
+            OnPropertyChanged(nameof(CanSave));
+        }
+
+        private string BuildValidationSummary()
+        {
+            if (_validationIssues.Count == 0)
+                return string.Empty;
+
+            var lines = new List<string>();
+            var stringIssues = _validationIssues.Where(i => i.StringNumber >= 0).ToList();
+
+            if (!_document.ParseAligned)
+            {
+                lines.Add($"Parser warning: {_document.ParseError ?? "the chunk was not parsed to the end"}. " +
+                          "Strings after the failure point may be missing.");
+            }
+
+            if (stringIssues.Count > 0)
+            {
+                lines.Add($"{stringIssues.Count} string{(stringIssues.Count == 1 ? "" : "s")} cannot be written:");
+                foreach (GplValidationIssue issue in stringIssues.Take(3))
+                    lines.Add($"#{issue.StringNumber}: {issue.Message}");
+                if (stringIssues.Count > 3)
+                    lines.Add($"... and {stringIssues.Count - 3} more.");
+            }
+
+            lines.Add("File generation is blocked until these errors are fixed.");
+            return string.Join(Environment.NewLine, lines);
+        }
+
         public override void Reload()
         {
+            DetachStrings();
             Strings.Clear();
             foreach (var str in _document.decodedStrings)
             {
                 Strings.Add(str);
             }
+            AttachStrings();
             OnPropertyChanged(nameof(Strings));
+            RefreshValidation();
             IsModified = false;
         }
 
@@ -70,10 +169,16 @@ namespace DarkSunRE.ViewModels
 
         public void ApplyStringChanges()
         {
-            _document.decodedStrings = Strings.ToList();
+            _document.decodedStrings = Strings.Where(s => s != null).ToList();
+            RefreshValidation();
+
+            if (HasValidationErrors)
+                throw new InvalidOperationException(ValidationSummary);
+
             _document.ApplyStringChanges();
             IsModified = true;
             OnPropertyChanged(nameof(NewBytes));
+            OnPropertyChanged(nameof(CanSave));
         }
 
         public void SaveModifiedFile(string targetPath = null)
@@ -141,17 +246,32 @@ namespace DarkSunRE.ViewModels
                 throw new InvalidOperationException("Failed to deserialize GPL strings.");
             }
 
+            DetachStrings();
             Strings.Clear();
             foreach (var s in decodedStrings)
             {
-                Strings.Add(s);
+                if (s != null)
+                    Strings.Add(s);
             }
+            AttachStrings();
 
             _document.decodedStrings = Strings.ToList();
-            _document.RefreshNewBytesAfterLoadJson();
+
+            // A translation file may legitimately contain errors while it is
+            // being edited. Keep the strings loaded so the user can fix them;
+            // RefreshValidation below turns those errors into UI messages.
+            try
+            {
+                _document.RefreshNewBytesAfterLoadJson();
+            }
+            catch (InvalidOperationException)
+            {
+                // Validation reports the concrete strings.
+            }
+
+            RefreshValidation();
             OnPropertyChanged(nameof(NewBytes));
             IsModified = true;
         }
     }
 }
-

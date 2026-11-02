@@ -82,7 +82,6 @@ namespace DarkSunRE.Models
                     SubType = span.SubType,
                     OriginalString = decoded,
                     NewString = decoded,
-                    RealString = !string.IsNullOrWhiteSpace(decoded),
                     OriginalBytes = ExtractRange(bytes, span.ContentStart, span.ContentLength),
                     NewBytes = ExtractRange(bytes, span.ContentStart, span.ContentLength),
                 };
@@ -104,6 +103,32 @@ namespace DarkSunRE.Models
             return outb;
         }
 
+        /// <summary>
+        /// Check every editable string against the same rules the encoder
+        /// uses. The result is empty when the chunk can be written safely.
+        /// </summary>
+        public IReadOnlyList<GplValidationIssue> Validate()
+        {
+            var issues = new List<GplValidationIssue>();
+
+            if (!ParseAligned)
+            {
+                issues.Add(new GplValidationIssue(
+                    -1,
+                    -1,
+                    $"Parser stopped before the end of the chunk: {ParseError ?? "unknown reason"}. " +
+                    "Strings after that point may be missing."));
+            }
+
+            foreach (GPLString gpl in decodedStrings.Where(s => s != null && s.IsEditable))
+            {
+                if (!TryEncodeString(gpl, TransliterationRules, originalBytes.Length, out _, out _, out string error))
+                    issues.Add(new GplValidationIssue(gpl.StringNumber, gpl.StartPosition, error));
+            }
+
+            return issues;
+        }
+
         private static byte[] ApplyStringChangesToBytes(
             byte[] originalBytes,
             List<GPLString> strings,
@@ -120,74 +145,16 @@ namespace DarkSunRE.Models
                          .Where(s => s != null && s.IsEditable)
                          .OrderByDescending(s => s.StartPosition))
             {
-                string originalString = gpl.OriginalString ?? string.Empty;
-                string newString = gpl.NewString ?? string.Empty;
+                if (!TryEncodeString(gpl, transliterationRules, result.Length,
+                        out byte[] encoded, out bool changed, out string error))
+                {
+                    throw new InvalidOperationException(
+                        $"GPL string #{gpl.StringNumber} at 0x{gpl.StartPosition:X}: {error}");
+                }
 
-                // The rules are stored as "game glyph = displayed
-                // character" (the font preview shows them that way), so
-                // encoding a Cyrillic translation goes through the
-                // reverse map.
-                newString = GplTransliteration.EncodeToGameCharset(
-                    newString,
-                    transliterationRules?
-                        .Where(r => r != null)
-                        .Select(r => new GplTransliterationRule(r.From ?? string.Empty, r.To ?? string.Empty))
-                        .ToList());
-
-                if (string.Equals(originalString, newString, StringComparison.Ordinal))
+                if (!changed)
                     continue;
 
-                if (newString.Length != originalString.Length)
-                {
-                    throw new InvalidOperationException(
-                        $"GPL string #{gpl.StringNumber} at 0x{gpl.StartPosition:X}: " +
-                        $"length {newString.Length} != original {originalString.Length}. " +
-                        "Fixed-length mode refuses to resize a span. " +
-                        "Use a translation of the same character count (pad with spaces if needed).");
-                }
-
-                for (int i = 0; i < newString.Length; i++)
-                {
-                    char bad = newString[i];
-                    if (bad <= 0x7F) continue;
-
-                    throw new InvalidOperationException(
-                        $"GPL string #{gpl.StringNumber} at 0x{gpl.StartPosition:X}: " +
-                        $"character U+{(int)bad:X4} '{bad}' has no 7-bit mapping. " +
-                        "Add a transliteration rule (game glyph=displayed character).");
-                }
-
-                int encodedLength = gpl.EncodedLength;
-                if (encodedLength <= 0 && gpl.OriginalBytes != null)
-                    encodedLength = gpl.OriginalBytes.Length;
-                if (encodedLength <= 0 && gpl.EndPosition >= gpl.StartPosition)
-                    encodedLength = gpl.EndPosition - gpl.StartPosition + 1;
-                if (encodedLength <= 0)
-                    encodedLength = GplStringCodec.PackedLength(originalString.Length);
-
-                int minimal = GplStringCodec.PackedLength(newString.Length);
-                if (minimal != encodedLength)
-                {
-                    // Same character count implies the same packed byte
-                    // count. A mismatch means the span metadata is wrong
-                    // (for example a hand-edited JSON); refusing here is
-                    // safer than writing padding, because zero padding
-                    // would be executed as the next GPL opcode.
-                    throw new InvalidOperationException(
-                        $"GPL string #{gpl.StringNumber} at 0x{gpl.StartPosition:X}: " +
-                        $"span is {encodedLength} bytes but {newString.Length} characters need {minimal}. " +
-                        "The span metadata does not match the fixed-length string.");
-                }
-
-                if (gpl.StartPosition < 0 ||
-                    gpl.StartPosition + encodedLength > result.Length)
-                {
-                    throw new InvalidOperationException(
-                        $"GPL string #{gpl.StringNumber}: span 0x{gpl.StartPosition:X} " +
-                        $"+{encodedLength} is outside the chunk.");
-                }
-
-                byte[] encoded = GplStringCodec.PackCompressed(newString, encodedLength);
                 Buffer.BlockCopy(encoded, 0, result, gpl.StartPosition, encoded.Length);
                 gpl.NewBytes = encoded;
             }
@@ -200,5 +167,99 @@ namespace DarkSunRE.Models
 
             return result;
         }
+
+        /// <summary>
+        /// Transliterate and pack one string without touching the chunk.
+        /// Returns false with a human-readable reason when the edit cannot
+        /// preserve the fixed-length layout.
+        /// </summary>
+        private static bool TryEncodeString(
+            GPLString gpl,
+            List<TransliterationRule> transliterationRules,
+            int chunkLength,
+            out byte[] encoded,
+            out bool changed,
+            out string error)
+        {
+            encoded = Array.Empty<byte>();
+            changed = false;
+            error = string.Empty;
+
+            string originalString = gpl.OriginalString ?? string.Empty;
+            string newString = gpl.NewString ?? string.Empty;
+
+            // The rules are stored as "game glyph = displayed character"
+            // (the font preview shows them that way), so encoding a
+            // Cyrillic translation goes through the reverse map.
+            newString = GplTransliteration.EncodeToGameCharset(
+                newString,
+                transliterationRules?
+                    .Where(r => r != null)
+                    .Select(r => new GplTransliterationRule(r.From ?? string.Empty, r.To ?? string.Empty))
+                    .ToList());
+
+            if (string.Equals(originalString, newString, StringComparison.Ordinal))
+                return true;
+
+            if (newString.Length != originalString.Length)
+            {
+                error = $"length {newString.Length} != original {originalString.Length}; " +
+                        "fixed-length mode refuses to resize a span. " +
+                        "Use a translation of the same character count (pad with spaces if needed).";
+                return false;
+            }
+
+            for (int i = 0; i < newString.Length; i++)
+            {
+                char bad = newString[i];
+                if (bad <= 0x7F) continue;
+
+                error = $"character U+{(int)bad:X4} '{bad}' has no 7-bit mapping. " +
+                        "Add a transliteration rule (game glyph=displayed character).";
+                return false;
+            }
+
+            int encodedLength = gpl.EncodedLength;
+            if (encodedLength <= 0 && gpl.OriginalBytes != null)
+                encodedLength = gpl.OriginalBytes.Length;
+            if (encodedLength <= 0 && gpl.EndPosition >= gpl.StartPosition)
+                encodedLength = gpl.EndPosition - gpl.StartPosition + 1;
+            if (encodedLength <= 0)
+                encodedLength = GplStringCodec.PackedLength(originalString.Length);
+
+            int minimal = GplStringCodec.PackedLength(newString.Length);
+            if (minimal != encodedLength)
+            {
+                // Same character count implies the same packed byte count.
+                // A mismatch means the span metadata is wrong (for example
+                // a hand-edited JSON); refusing here is safer than writing
+                // padding, because zero padding would be executed as the
+                // next GPL opcode.
+                error = $"span is {encodedLength} bytes but {newString.Length} characters need {minimal}. " +
+                        "The span metadata does not match the fixed-length string.";
+                return false;
+            }
+
+            if (gpl.StartPosition < 0 || gpl.StartPosition + encodedLength > chunkLength)
+            {
+                error = $"span 0x{gpl.StartPosition:X}+{encodedLength} is outside the chunk.";
+                return false;
+            }
+
+            try
+            {
+                encoded = GplStringCodec.PackCompressed(newString, encodedLength);
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+
+            changed = true;
+            return true;
+        }
     }
+
+    public sealed record GplValidationIssue(int StringNumber, int StartPosition, string Message);
 }

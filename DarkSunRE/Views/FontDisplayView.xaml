@@ -31,6 +31,10 @@
             <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="5,0"/>
             
             <CheckBox Content="Transparent" IsChecked="{Binding IsTransparent}" VerticalAlignment="Center" Margin="5,0"/>
+            <CheckBox Content="Edit glyph pixels" IsChecked="{Binding IsPixelEditing}" VerticalAlignment="Center" Margin="5,0"/>
+            <Button Content="Save font" Command="{Binding SaveCommand}" Margin="4,0" Padding="8,3"/>
+            <Button Content="Reload" Command="{Binding ReloadCommand}" Margin="4,0" Padding="8,3"/>
+            <TextBlock Text="{Binding ValidationError}" Foreground="Firebrick" VerticalAlignment="Center" Margin="5,0"/>
         </StackPanel>
         
         <!-- Font character grid -->
@@ -61,6 +65,7 @@
                                 <!-- Character image -->
                                 <Image Source="{Binding Image}"
                                        Stretch="None"
+                                       MouseLeftButtonDown="GlyphImage_MouseLeftButtonDown"
                                        RenderOptions.BitmapScalingMode="NearestNeighbor">
                                     <Image.LayoutTransform>
                                         <ScaleTransform ScaleX="{Binding DataContext.Scale, RelativeSource={RelativeSource AncestorType=ItemsControl}}"

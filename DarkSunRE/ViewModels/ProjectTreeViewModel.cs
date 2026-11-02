@@ -1,6 +1,7 @@
 ﻿using DarkSunRE.Commands;
 using DarkSunRE.Models;
 using DarkSunRE.Services;
+using DSunTools.Common.Gpl;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -408,49 +409,78 @@ namespace DarkSunRE.ViewModels
             try
             {
                 Directory.CreateDirectory(CurrentProject.JsonFolderPath);
-
                 var export = new TextResourcesExport
                 {
                     ProjectName = CurrentProject.ProjectName,
-                    ExportDate = DateTime.Now,
-                    Resources = new List<TextResourceEntry>()
+                    ExportDate = DateTime.Now
                 };
+                var errors = new List<string>();
 
-                // Collect all text resources from all GFF files in the project
-                foreach (var resourceFile in CurrentProject.Files)
+                foreach (ResourceFile resourceFile in CurrentProject.Files)
                 {
                     if (resourceFile.Data == null)
-                        continue;
-
-                    var gff = _resourceService.ParseGffFile(resourceFile.Data);
-                    var textResources = resourceFile.Resources
-                        .Where(r => r.Type == ResourceType.Text || r.Type == ResourceType.Name)
-                        .ToList();
-
-                    foreach (var resource in textResources)
                     {
-                        string originalText = DecodeResourceText(resource, gff, resourceFile);
-                        string translatedText = GetResourceTranslation(resource);
+                        errors.Add($"{resourceFile.Name}: file data is not loaded.");
+                        continue;
+                    }
 
-                        export.Resources.Add(new TextResourceEntry
+                    DSunTools.Common.Gff.GffFile gff;
+                    try
+                    {
+                        gff = _resourceService.ParseGffFile(resourceFile.Data);
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"{resourceFile.Name}: {ex.Message}");
+                        continue;
+                    }
+
+                    foreach (ResourceInfo resource in resourceFile.Resources?.Where(item => item.Type == ResourceType.Text || item.Type == ResourceType.Name)
+                                 ?? Enumerable.Empty<ResourceInfo>())
+                    {
+                        try
                         {
-                            ResourceId = $"{resource.Tag}-{resource.Number}",
-                            ResourceType = resource.Type.ToString(),
-                            OriginalText = originalText,
-                            TranslatedText = translatedText
-                        });
+                            byte[] originalData = _resourceService.GetResourceData(gff, resource.Tag, resource.Number)
+                                ?? throw new InvalidDataException("Resource data is unavailable.");
+                            byte[] currentData = resource.ModifiedData ?? originalData;
+                            var entry = new TextResourceEntry
+                            {
+                                ContainerName = resourceFile.Name,
+                                ResourceId = $"{resource.Tag}-{resource.Number}",
+                                ResourceType = resource.Type.ToString()
+                            };
+
+                            if (resource.Type == ResourceType.Text)
+                            {
+                                entry.OriginalText = DecodeGameText(originalData);
+                                entry.TranslatedText = DecodeGameText(currentData);
+                            }
+                            else
+                            {
+                                NameResource originalNames = ReadNameResource(originalData);
+                                NameResource currentNames = ReadNameResource(currentData);
+                                entry.NameEntries = ExportNameEntries(originalNames, currentNames);
+                            }
+
+                            export.Resources.Add(entry);
+                        }
+                        catch (Exception ex)
+                        {
+                            errors.Add($"{resourceFile.Name}:{resource.Tag}-{resource.Number}: {ex.Message}");
+                        }
                     }
                 }
 
-                // Save to single JSON file
                 string fileName = $"{CurrentProject.ProjectName}_texts.json";
                 string fullPath = Path.Combine(CurrentProject.JsonFolderPath, fileName);
-
                 using var fs = new FileStream(fullPath, FileMode.Create);
-                var options = new JsonSerializerOptions { WriteIndented = true };
-                JsonSerializer.Serialize(fs, export, options);
+                JsonSerializer.Serialize(fs, export, new JsonSerializerOptions { WriteIndented = true });
 
-                _statusService.ShowSuccess($"Exported {export.Resources.Count} text resource(s) to {fileName}");
+                string message = $"Exported {export.Resources.Count} text resource(s) to {fileName}.";
+                if (errors.Count == 0)
+                    _statusService.ShowSuccess(message);
+                else
+                    _statusService.ShowWarning($"{message} Some resources failed:\n{FormatResourceErrors(errors)}");
             }
             catch (Exception ex)
             {
@@ -473,7 +503,6 @@ namespace DarkSunRE.ViewModels
             {
                 string fileName = $"{CurrentProject.ProjectName}_texts.json";
                 string fullPath = Path.Combine(CurrentProject.JsonFolderPath, fileName);
-
                 if (!File.Exists(fullPath))
                 {
                     _statusService.ShowError($"Text resource file {fileName} not found.");
@@ -481,8 +510,7 @@ namespace DarkSunRE.ViewModels
                 }
 
                 using var fs = new FileStream(fullPath, FileMode.Open, FileAccess.Read);
-                var import = JsonSerializer.Deserialize<TextResourcesExport>(fs);
-
+                TextResourcesExport import = JsonSerializer.Deserialize<TextResourcesExport>(fs);
                 if (import?.Resources == null || import.Resources.Count == 0)
                 {
                     _statusService.ShowWarning("No text resources found in the JSON file.");
@@ -490,33 +518,35 @@ namespace DarkSunRE.ViewModels
                 }
 
                 int loadedCount = 0;
-                int notFoundCount = 0;
-
-                // Load each resource
-                foreach (var entry in import.Resources)
+                var errors = new List<string>();
+                foreach (TextResourceEntry entry in import.Resources)
                 {
-                    var resource = FindResourceByTag(entry.ResourceId);
-                    if (resource == null)
-                    {
-                        notFoundCount++;
-                        continue;
-                    }
-
-                    // Encode the translated text back to resource format
+                    string label = $"{entry?.ContainerName ?? "(legacy JSON)"}:{entry?.ResourceId ?? "(missing ID)"}";
                     try
                     {
-                        byte[] encodedBytes = EncodeResourceText(resource, entry.TranslatedText);
-                        resource.ModifiedData = encodedBytes;
+                        if (entry == null)
+                            throw new InvalidDataException("Entry is null.");
+
+                        (ResourceFile file, ResourceInfo resource) = FindTextResource(entry.ContainerName, entry.ResourceId);
+                        if (!string.Equals(entry.ResourceType, resource.Type.ToString(), StringComparison.OrdinalIgnoreCase))
+                            throw new InvalidDataException($"JSON type '{entry.ResourceType}' does not match resource type '{resource.Type}'.");
+
+                        resource.ModifiedData = EncodeResourceText(resource, entry);
                         resource.IsModified = true;
+                        file.IsModified = true;
                         loadedCount++;
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
-                        notFoundCount++;
+                        errors.Add($"{label}: {ex.Message}");
                     }
                 }
 
-                _statusService.ShowSuccess($"Loaded {loadedCount} text resource(s) from {fileName}; {notFoundCount} not found or failed.");
+                string message = $"Loaded {loadedCount} text resource(s) from {fileName}.";
+                if (errors.Count == 0)
+                    _statusService.ShowSuccess(message);
+                else
+                    _statusService.ShowWarning($"{message} Some entries failed:\n{FormatResourceErrors(errors)}");
             }
             catch (Exception ex)
             {
@@ -524,100 +554,120 @@ namespace DarkSunRE.ViewModels
             }
         }
 
-        /// <summary>
-        /// Finds a resource by its TAG-NUMBER identifier across all GFF files.
-        /// </summary>
-        private ResourceInfo FindResourceByTag(string resourceId)
+        private (ResourceFile File, ResourceInfo Resource) FindTextResource(string containerName, string resourceId)
         {
-            // Parse TAG-NUMBER format
-            var parts = resourceId.Split('-');
-            if (parts.Length != 2 || !int.TryParse(parts[1], out int number))
-                return null;
+            int separator = resourceId?.LastIndexOf('-') ?? -1;
+            if (separator <= 0 || !int.TryParse(resourceId.Substring(separator + 1), out int number))
+                throw new InvalidDataException($"Invalid resource ID '{resourceId}'. Expected TAG-NUMBER.");
 
-            string tag = parts[0];
+            string tag = resourceId.Substring(0, separator);
+            var matches = CurrentProject.Files
+                .Where(file => string.IsNullOrWhiteSpace(containerName) || string.Equals(file.Name, containerName, StringComparison.OrdinalIgnoreCase))
+                .SelectMany(file => (file.Resources ?? new List<ResourceInfo>())
+                    .Where(resource => string.Equals(resource.Tag, tag, StringComparison.OrdinalIgnoreCase) && resource.Number == number)
+                    .Select(resource => (File: file, Resource: resource)))
+                .ToList();
 
-            // Search across all resource files
-            foreach (var file in CurrentProject.Files)
+            if (matches.Count == 0)
+                throw new KeyNotFoundException($"Resource '{resourceId}' was not found in container '{containerName}'.");
+            if (matches.Count > 1)
+                throw new InvalidDataException($"Resource '{resourceId}' is ambiguous without a unique container name.");
+            return matches[0];
+        }
+
+        private List<NameResourceEntryExport> ExportNameEntries(NameResource original, NameResource current)
+        {
+            var result = new List<NameResourceEntryExport>(current.Entries.Count);
+            for (int i = 0; i < current.Entries.Count; i++)
             {
-                var resource = file.Resources?.FirstOrDefault(r =>
-                    string.Equals(r.Tag, tag, StringComparison.OrdinalIgnoreCase) &&
-                    r.Number == number);
-
-                if (resource != null)
-                    return resource;
-            }
-
-            return null;
-        }
-
-        /// <summary>
-        /// Decodes a text resource to display text.
-        /// </summary>
-        private string DecodeResourceText(ResourceInfo resource, DSunTools.Common.Gff.GffFile gff, ResourceFile file)
-        {
-            try
-            {
-                if (resource.Type == ResourceType.Text)
+                NameEntry currentEntry = current.Entries[i];
+                string originalName = i < original.Entries.Count ? DecodeGameText(original.Entries[i].MainName) : string.Empty;
+                result.Add(new NameResourceEntryExport
                 {
-                    byte[] data = resource.ModifiedData ?? _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
-                    if (data == null || data.Length == 0)
-                        return string.Empty;
-
-                    // Text resources are stored as plain text encoded in Latin1
-                    return Encoding.Latin1.GetString(data).TrimEnd('\0');
-                }
-                else if (resource.Type == ResourceType.Name)
-                {
-                    byte[] data = resource.ModifiedData ?? _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
-                    if (data == null || data.Length == 0)
-                        return string.Empty;
-
-                    // For NAME resources, parse the structure and extract the main name
-                    var nameResource = new NameResource();
-                    nameResource.LoadFromBytes(data);
-
-                    // Return the first entry's main name as a simple representation
-                    if (nameResource.Entries.Count > 0)
-                        return $"[{nameResource.Entries.Count} entries] {nameResource.Entries[0].MainName}";
-                    return "[No entries]";
-                }
+                    OriginalMainName = originalName,
+                    TranslatedMainName = DecodeGameText(currentEntry.MainName),
+                    Path = currentEntry.Path,
+                    Index = currentEntry.Index,
+                    Flag = currentEntry.Flag
+                });
             }
-            catch { }
-
-            return string.Empty;
+            return result;
         }
 
-        /// <summary>
-        /// Gets the translated text for a resource (currently returns empty string as placeholder).
-        /// </summary>
-        private string GetResourceTranslation(ResourceInfo resource)
+        private NameResource ReadNameResource(byte[] data)
         {
-            // In a real implementation, this would check ModifiedData or an external translation storage
-            // For now, we return empty string to indicate no translation exists yet
-            return string.Empty;
+            var nameResource = new NameResource();
+            nameResource.LoadFromBytes(data);
+            return nameResource;
         }
 
-        /// <summary>
-        /// Encodes display text back to resource byte format.
-        /// </summary>
-        private byte[] EncodeResourceText(ResourceInfo resource, string text)
+        private string DecodeGameText(string text)
+        {
+            return GplTransliteration.DecodeToDisplay(text ?? string.Empty, GetResourceTransliterationRules());
+        }
+
+        private string DecodeGameText(byte[] data)
+        {
+            return DecodeGameText(Encoding.Latin1.GetString(data).TrimEnd('\0'));
+        }
+
+        private string EncodeGameText(string text)
+        {
+            string gameText = GplTransliteration.EncodeToGameCharset(text ?? string.Empty, GetResourceTransliterationRules());
+            if (gameText.Any(character => character > byte.MaxValue))
+                throw new InvalidOperationException("Text contains characters without a one-byte game glyph mapping. Add a transliteration rule.");
+            return gameText;
+        }
+
+        private List<GplTransliterationRule> GetResourceTransliterationRules()
+        {
+            return CurrentProject.TransliterationRules?
+                .Where(rule => rule != null)
+                .Select(rule => new GplTransliterationRule(rule.From ?? string.Empty, rule.To ?? string.Empty))
+                .ToList() ?? new List<GplTransliterationRule>();
+        }
+
+        private byte[] EncodeResourceText(ResourceInfo resource, TextResourceEntry entry)
         {
             if (resource.Type == ResourceType.Text)
             {
-                // Text resources are stored as plain text encoded in Latin1
-                if (text.Any(c => c > byte.MaxValue))
-                    throw new InvalidOperationException("Text contains characters that cannot be encoded as Latin1.");
-
-                return Encoding.Latin1.GetBytes(text);
+                if (entry.TranslatedText == null)
+                    throw new InvalidDataException("TEXT entry has no TranslatedText value.");
+                return Encoding.Latin1.GetBytes(EncodeGameText(entry.TranslatedText));
             }
-            else if (resource.Type == ResourceType.Name)
+
+            if (resource.Type == ResourceType.Name)
             {
-                // For NAME resources, we would need to parse and re-encode the entire structure
-                // This is complex, so for now we throw an error
-                throw new NotSupportedException("Editing NAME resources through batch import is not yet supported.");
+                if (entry.NameEntries == null)
+                    throw new InvalidDataException("NAME entry has no NameEntries data; export the current JSON format before importing.");
+
+                var names = new NameResource();
+                foreach (NameResourceEntryExport exportedName in entry.NameEntries)
+                {
+                    if (exportedName == null)
+                        throw new InvalidDataException("NAME record is null.");
+                    names.Entries.Add(new NameEntry
+                    {
+                        MainName = exportedName.TranslatedMainName ?? exportedName.OriginalMainName ?? string.Empty,
+                        Path = exportedName.Path ?? string.Empty,
+                        Index = exportedName.Index,
+                        Flag = exportedName.Flag
+                    });
+                }
+
+                return names.SaveToBytes(GetResourceTransliterationRules());
             }
 
             throw new InvalidOperationException($"Unsupported resource type: {resource.Type}");
+        }
+
+        private static string FormatResourceErrors(List<string> errors)
+        {
+            const int maximumShown = 8;
+            string details = string.Join(Environment.NewLine, errors.Take(maximumShown));
+            if (errors.Count > maximumShown)
+                details += Environment.NewLine + $"... and {errors.Count - maximumShown} more.";
+            return details;
         }
 
         private void GenerateNewFile(ProjectNode node)

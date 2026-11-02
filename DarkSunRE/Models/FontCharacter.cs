@@ -17,24 +17,9 @@ namespace DarkSunRE.Models
         // Transliteration for the character if available
         public string Transliteration { get; set; }
         
-        // Latin character representation (if not a control character)
-        // For display purposes, we offset the character code by 32 to match visual representation
-        public string LatinCharacter
-        {
-            get
-            {
-                int displayCharCode = CharCode + 32;
-                if (displayCharCode >= 32 && displayCharCode <= 126)
-                {
-                    return ((char)displayCharCode).ToString();
-                }
-                return string.Empty;
-            }
-        }
-        
-        // Check if this is a control character
-        // For display purposes, we check against the visual character code (offset by 32)
-        public bool IsControlCharacter => (CharCode + 32) < 32 || (CharCode + 32) == 127;
+        public string LatinCharacter => CharCode is >= 32 and <= 126 ? ((char)CharCode).ToString() : string.Empty;
+
+        public bool IsControlCharacter => CharCode < 32 || CharCode == 127;
         
         // Pre-rendered image for display
         public ImageSource Image { get; set; }

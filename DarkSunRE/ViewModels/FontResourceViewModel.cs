@@ -25,6 +25,10 @@ namespace DarkSunRE.ViewModels
         private ICommand _resetZoomCommand;
         private Project _project;
         private ResourceInfo _resourceInfo;
+        private FontParser _fontParser;
+        private byte[] _originalFontData = Array.Empty<byte>();
+        private string _validationError = string.Empty;
+        private bool _isPixelEditing;
         private Palette _selectedPalette;
         private PaletteInfo _selectedPaletteInfo;
         private ObservableCollection<PaletteInfo> _availablePalettes;
@@ -42,6 +46,29 @@ namespace DarkSunRE.ViewModels
                 ParseFontData();
             }
         }
+
+        public string ValidationError
+        {
+            get => _validationError;
+            private set
+            {
+                _validationError = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public bool IsPixelEditing
+        {
+            get => _isPixelEditing;
+            set
+            {
+                _isPixelEditing = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public ICommand SaveCommand { get; }
+        public ICommand ReloadCommand { get; }
 
         public ObservableCollection<FontCharacter> Characters
         {
@@ -124,13 +151,17 @@ namespace DarkSunRE.ViewModels
             _zoomInCommand = new RelayCommand(ZoomIn);
             _zoomOutCommand = new RelayCommand(ZoomOut);
             _resetZoomCommand = new RelayCommand(ResetZoom);
+            SaveCommand = new RelayCommand(Save, () => IsModified && _resourceInfo != null && _fontParser != null);
+            ReloadCommand = new RelayCommand(Reload, () => IsModified);
         }
 
         public void Initialize(Project project, ResourceInfo resourceInfo, byte[] fontData)
         {
             _project = project;
-            _resourceInfo = resourceInfo;
-            FontData = fontData;
+            _resourceInfo = resourceInfo ?? throw new ArgumentNullException(nameof(resourceInfo));
+            _originalFontData = fontData == null ? Array.Empty<byte>() : (byte[])fontData.Clone();
+            FontData = (byte[])_originalFontData.Clone();
+            IsModified = false;
             
             // Load available palettes from the project
             LoadAvailablePalettes();
@@ -198,9 +229,10 @@ namespace DarkSunRE.ViewModels
 
             try
             {
-                var parser = new FontParser();
-                var characters = parser.ParseFontData(_fontData);
-                
+                _fontParser = new FontParser();
+                var characters = _fontParser.ParseFontData(_fontData);
+                ValidationError = string.Empty;
+
                 // Apply transliteration if available
                 if (_project?.TransliterationRules != null)
                 {
@@ -224,9 +256,26 @@ namespace DarkSunRE.ViewModels
             }
             catch (Exception ex)
             {
-                // Handle parsing error
+                _fontParser = null;
+                ValidationError = ex.Message;
+                Characters = new ObservableCollection<FontCharacter>();
                 System.Diagnostics.Debug.WriteLine($"Failed to parse font data: {ex.Message}");
             }
+        }
+
+        public void ToggleGlyphPixel(int characterCode, int x, int y)
+        {
+            if (!IsPixelEditing)
+                return;
+
+            FontCharacter glyph = Characters.FirstOrDefault(character => character.CharCode == characterCode);
+            if (glyph?.Pixels == null || y < 0 || y >= glyph.Pixels.GetLength(0) || x < 0 || x >= glyph.Pixels.GetLength(1))
+                return;
+
+            glyph.Pixels[y, x] = glyph.Pixels[y, x] == 0 ? (byte)0xFE : (byte)0;
+            RenderAllCharacterImages();
+            IsModified = true;
+            CommandManager.InvalidateRequerySuggested();
         }
 
         private void RenderAllCharacterImages()
@@ -364,12 +413,25 @@ namespace DarkSunRE.ViewModels
 
         public override void Reload()
         {
-            ParseFontData();
+            FontData = (byte[])_originalFontData.Clone();
+            IsModified = false;
+            ValidationError = string.Empty;
+            CommandManager.InvalidateRequerySuggested();
         }
 
         public override void Save()
         {
-            // Font saving not implemented yet
+            if (_resourceInfo == null || _fontParser == null)
+                throw new InvalidOperationException("The FONT resource is not initialized or could not be parsed.");
+
+            byte[] updatedData = _fontParser.BuildFontData(Characters.ToList());
+            _resourceInfo.ModifiedData = updatedData;
+            _resourceInfo.IsModified = true;
+            _originalFontData = (byte[])updatedData.Clone();
+            FontData = (byte[])updatedData.Clone();
+            IsModified = false;
+            ValidationError = string.Empty;
+            CommandManager.InvalidateRequerySuggested();
         }
     }
 }

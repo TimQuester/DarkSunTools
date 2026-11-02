@@ -18,5 +18,6 @@ namespace DarkSunRE.Models
         public string Description { get; set; }
         public ImageSource Thumbnail { get; set; }
         public bool IsModified { get; set; }
+        public byte[] ModifiedData { get; set; }
     }
 }

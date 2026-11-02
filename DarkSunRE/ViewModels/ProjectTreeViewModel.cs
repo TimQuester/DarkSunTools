@@ -9,6 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -44,6 +45,8 @@ namespace DarkSunRE.ViewModels
         public ICommand GenerateNewFileCommand { get; }
         public ICommand SaveAllJsonsCommand { get; }
         public ICommand LoadAllJsonsCommand { get; }
+        public ICommand SaveAllTextJsonCommand { get; }
+        public ICommand LoadAllTextJsonCommand { get; }
         public ICommand ToggleFilterCommand { get; }
         public ICommand SelectAllFiltersCommand { get; }
         public ICommand DeselectAllFiltersCommand { get; }
@@ -65,6 +68,8 @@ namespace DarkSunRE.ViewModels
             GenerateNewFileCommand = new RelayCommand<ProjectNode>(GenerateNewFile);
             SaveAllJsonsCommand = new RelayCommand<ProjectNode>(SaveAllJsons);
             LoadAllJsonsCommand = new RelayCommand<ProjectNode>(LoadAllJsons);
+            SaveAllTextJsonCommand = new RelayCommand<ProjectNode>(SaveAllTextJson);
+            LoadAllTextJsonCommand = new RelayCommand<ProjectNode>(LoadAllTextJson);
             ToggleFilterCommand = new RelayCommand<string>(ToggleFilter);
             SelectAllFiltersCommand = new RelayCommand(SelectAllFilters);
             DeselectAllFiltersCommand = new RelayCommand(DeselectAllFilters);
@@ -300,28 +305,32 @@ namespace DarkSunRE.ViewModels
                 return;
             }
 
-            if (node?.Item is not ResourceFile file || file.Resources == null)
+            if (node?.Item is not ResourceFile file || file.Resources == null || file.Data == null)
             {
-                _statusService.ShowError("Invalid file selection.");
+                _statusService.ShowError("Invalid or unloaded GFF file selection.");
                 return;
             }
 
-            Directory.CreateDirectory(CurrentProject.JsonFolderPath);
-
-            foreach (var resource in file.Resources)
+            try
             {
-                var doc = CurrentProject.OpenedDocuments.FirstOrDefault(d =>
-                    string.Equals(d.FileName, file.Name, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(d.ResourceName, $"{resource.Tag}-{resource.Number}", StringComparison.OrdinalIgnoreCase));
+                Directory.CreateDirectory(CurrentProject.JsonFolderPath);
+                var gff = _resourceService.ParseGffFile(file.Data);
+                var scripts = file.Resources.Where(resource => resource.Type == ResourceType.Script).ToList();
+                int savedCount = 0;
 
-                if (doc != null)
+                foreach (ResourceInfo resource in scripts)
                 {
-                    var vm = new GplDocumentViewModel(doc);
-                    vm.SaveJson(CurrentProject.JsonFolderPath);
+                    var document = FindOpenedGplDocument(file, resource) ?? CreateGplDocument(file, resource, gff);
+                    new GplDocumentViewModel(document).SaveJson(CurrentProject.JsonFolderPath);
+                    savedCount++;
                 }
-            }
 
-            _statusService.ShowSuccess("All JSONs saved.");
+                _statusService.ShowSuccess($"Saved {savedCount} GPL JSON file(s) from {file.Name}.");
+            }
+            catch (Exception ex)
+            {
+                _statusService.ShowError($"Failed to export GPL JSON files from {file.Name}: {ex.Message}", ex);
+            }
         }
 
         private void LoadAllJsons(ProjectNode node)
@@ -332,30 +341,283 @@ namespace DarkSunRE.ViewModels
                 return;
             }
 
-            if (node?.Item is not ResourceFile file || file.Resources == null)
+            if (node?.Item is not ResourceFile file || file.Resources == null || file.Data == null)
             {
-                _statusService.ShowError("Invalid file selection.");
+                _statusService.ShowError("Invalid or unloaded GFF file selection.");
                 return;
             }
 
-            foreach (var resource in file.Resources)
+            try
             {
-                var doc = CurrentProject.OpenedDocuments.FirstOrDefault(d =>
-                    string.Equals(d.FileName, file.Name, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(d.ResourceName, $"{resource.Tag}-{resource.Number}", StringComparison.OrdinalIgnoreCase));
+                var gff = _resourceService.ParseGffFile(file.Data);
+                var scripts = file.Resources.Where(resource => resource.Type == ResourceType.Script).ToList();
+                int loadedCount = 0;
+                int missingCount = 0;
 
-                if (doc != null)
+                foreach (ResourceInfo resource in scripts)
                 {
-                    var path = Path.Combine(CurrentProject.JsonFolderPath, $"{doc.FileName}_{doc.ResourceName}.json");
-                    if (File.Exists(path))
+                    string jsonPath = Path.Combine(CurrentProject.JsonFolderPath, $"{file.Name}_{resource.Tag}-{resource.Number}.json");
+                    if (!File.Exists(jsonPath))
                     {
-                        var vm = new GplDocumentViewModel(doc);
-                        vm.LoadJson(path);
+                        missingCount++;
+                        continue;
                     }
+
+                    GPLDocument document = FindOpenedGplDocument(file, resource) ?? CreateGplDocument(file, resource, gff);
+                    if (!CurrentProject.OpenedDocuments.Contains(document))
+                        CurrentProject.OpenedDocuments.Add(document);
+
+                    new GplDocumentViewModel(document).LoadJson(jsonPath);
+                    loadedCount++;
                 }
+
+                _statusService.ShowSuccess($"Loaded {loadedCount} GPL JSON file(s) from {file.Name}; {missingCount} missing.");
+            }
+            catch (Exception ex)
+            {
+                _statusService.ShowError($"Failed to import GPL JSON files from {file.Name}: {ex.Message}", ex);
+            }
+        }
+
+        private GPLDocument FindOpenedGplDocument(ResourceFile file, ResourceInfo resource)
+        {
+            return CurrentProject.OpenedDocuments.FirstOrDefault(document =>
+                string.Equals(document.FileName, file.Name, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(document.ResourceName, $"{resource.Tag}-{resource.Number}", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private GPLDocument CreateGplDocument(ResourceFile file, ResourceInfo resource, DSunTools.Common.Gff.GffFile gff)
+        {
+            byte[] data = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
+            string resourceName = $"{resource.Tag}-{resource.Number}";
+            return new GPLDocument(data, $"{file.Name}:{resourceName}", file.FullPath, file.Name, resourceName,
+                CurrentProject.TransliterationRules);
+        }
+
+        /// <summary>
+        /// Exports all text resources (TEXT, MSG, MERR, ETME, SPIN, RNME, NAME) to a single JSON file.
+        /// </summary>
+        private void SaveAllTextJson(ProjectNode node)
+        {
+            if (CurrentProject == null || string.IsNullOrWhiteSpace(CurrentProject.JsonFolderPath))
+            {
+                _statusService.ShowError("JSON folder path is not configured.");
+                return;
             }
 
-            _statusService.ShowSuccess("All JSONs loaded.");
+            try
+            {
+                Directory.CreateDirectory(CurrentProject.JsonFolderPath);
+
+                var export = new TextResourcesExport
+                {
+                    ProjectName = CurrentProject.ProjectName,
+                    ExportDate = DateTime.Now,
+                    Resources = new List<TextResourceEntry>()
+                };
+
+                // Collect all text resources from all GFF files in the project
+                foreach (var resourceFile in CurrentProject.Files)
+                {
+                    if (resourceFile.Data == null)
+                        continue;
+
+                    var gff = _resourceService.ParseGffFile(resourceFile.Data);
+                    var textResources = resourceFile.Resources
+                        .Where(r => r.Type == ResourceType.Text || r.Type == ResourceType.Name)
+                        .ToList();
+
+                    foreach (var resource in textResources)
+                    {
+                        string originalText = DecodeResourceText(resource, gff, resourceFile);
+                        string translatedText = GetResourceTranslation(resource);
+
+                        export.Resources.Add(new TextResourceEntry
+                        {
+                            ResourceId = $"{resource.Tag}-{resource.Number}",
+                            ResourceType = resource.Type.ToString(),
+                            OriginalText = originalText,
+                            TranslatedText = translatedText
+                        });
+                    }
+                }
+
+                // Save to single JSON file
+                string fileName = $"{CurrentProject.ProjectName}_texts.json";
+                string fullPath = Path.Combine(CurrentProject.JsonFolderPath, fileName);
+
+                using var fs = new FileStream(fullPath, FileMode.Create);
+                var options = new JsonSerializerOptions { WriteIndented = true };
+                JsonSerializer.Serialize(fs, export, options);
+
+                _statusService.ShowSuccess($"Exported {export.Resources.Count} text resource(s) to {fileName}");
+            }
+            catch (Exception ex)
+            {
+                _statusService.ShowError($"Failed to export text resources: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Imports all text resources from a single JSON file and updates ResourceInfo.ModifiedData.
+        /// </summary>
+        private void LoadAllTextJson(ProjectNode node)
+        {
+            if (CurrentProject == null || string.IsNullOrWhiteSpace(CurrentProject.JsonFolderPath))
+            {
+                _statusService.ShowError("JSON folder path is not configured.");
+                return;
+            }
+
+            try
+            {
+                string fileName = $"{CurrentProject.ProjectName}_texts.json";
+                string fullPath = Path.Combine(CurrentProject.JsonFolderPath, fileName);
+
+                if (!File.Exists(fullPath))
+                {
+                    _statusService.ShowError($"Text resource file {fileName} not found.");
+                    return;
+                }
+
+                using var fs = new FileStream(fullPath, FileMode.Open, FileAccess.Read);
+                var import = JsonSerializer.Deserialize<TextResourcesExport>(fs);
+
+                if (import?.Resources == null || import.Resources.Count == 0)
+                {
+                    _statusService.ShowWarning("No text resources found in the JSON file.");
+                    return;
+                }
+
+                int loadedCount = 0;
+                int notFoundCount = 0;
+
+                // Load each resource
+                foreach (var entry in import.Resources)
+                {
+                    var resource = FindResourceByTag(entry.ResourceId);
+                    if (resource == null)
+                    {
+                        notFoundCount++;
+                        continue;
+                    }
+
+                    // Encode the translated text back to resource format
+                    try
+                    {
+                        byte[] encodedBytes = EncodeResourceText(resource, entry.TranslatedText);
+                        resource.ModifiedData = encodedBytes;
+                        resource.IsModified = true;
+                        loadedCount++;
+                    }
+                    catch (Exception)
+                    {
+                        notFoundCount++;
+                    }
+                }
+
+                _statusService.ShowSuccess($"Loaded {loadedCount} text resource(s) from {fileName}; {notFoundCount} not found or failed.");
+            }
+            catch (Exception ex)
+            {
+                _statusService.ShowError($"Failed to import text resources: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Finds a resource by its TAG-NUMBER identifier across all GFF files.
+        /// </summary>
+        private ResourceInfo FindResourceByTag(string resourceId)
+        {
+            // Parse TAG-NUMBER format
+            var parts = resourceId.Split('-');
+            if (parts.Length != 2 || !int.TryParse(parts[1], out int number))
+                return null;
+
+            string tag = parts[0];
+
+            // Search across all resource files
+            foreach (var file in CurrentProject.Files)
+            {
+                var resource = file.Resources?.FirstOrDefault(r =>
+                    string.Equals(r.Tag, tag, StringComparison.OrdinalIgnoreCase) &&
+                    r.Number == number);
+
+                if (resource != null)
+                    return resource;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Decodes a text resource to display text.
+        /// </summary>
+        private string DecodeResourceText(ResourceInfo resource, DSunTools.Common.Gff.GffFile gff, ResourceFile file)
+        {
+            try
+            {
+                if (resource.Type == ResourceType.Text)
+                {
+                    byte[] data = resource.ModifiedData ?? _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
+                    if (data == null || data.Length == 0)
+                        return string.Empty;
+
+                    // Text resources are stored as plain text encoded in Latin1
+                    return Encoding.Latin1.GetString(data).TrimEnd('\0');
+                }
+                else if (resource.Type == ResourceType.Name)
+                {
+                    byte[] data = resource.ModifiedData ?? _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
+                    if (data == null || data.Length == 0)
+                        return string.Empty;
+
+                    // For NAME resources, parse the structure and extract the main name
+                    var nameResource = new NameResource();
+                    nameResource.LoadFromBytes(data);
+
+                    // Return the first entry's main name as a simple representation
+                    if (nameResource.Entries.Count > 0)
+                        return $"[{nameResource.Entries.Count} entries] {nameResource.Entries[0].MainName}";
+                    return "[No entries]";
+                }
+            }
+            catch { }
+
+            return string.Empty;
+        }
+
+        /// <summary>
+        /// Gets the translated text for a resource (currently returns empty string as placeholder).
+        /// </summary>
+        private string GetResourceTranslation(ResourceInfo resource)
+        {
+            // In a real implementation, this would check ModifiedData or an external translation storage
+            // For now, we return empty string to indicate no translation exists yet
+            return string.Empty;
+        }
+
+        /// <summary>
+        /// Encodes display text back to resource byte format.
+        /// </summary>
+        private byte[] EncodeResourceText(ResourceInfo resource, string text)
+        {
+            if (resource.Type == ResourceType.Text)
+            {
+                // Text resources are stored as plain text encoded in Latin1
+                if (text.Any(c => c > byte.MaxValue))
+                    throw new InvalidOperationException("Text contains characters that cannot be encoded as Latin1.");
+
+                return Encoding.Latin1.GetBytes(text);
+            }
+            else if (resource.Type == ResourceType.Name)
+            {
+                // For NAME resources, we would need to parse and re-encode the entire structure
+                // This is complex, so for now we throw an error
+                throw new NotSupportedException("Editing NAME resources through batch import is not yet supported.");
+            }
+
+            throw new InvalidOperationException($"Unsupported resource type: {resource.Type}");
         }
 
         private void GenerateNewFile(ProjectNode node)
@@ -388,11 +650,17 @@ namespace DarkSunRE.ViewModels
                             string.Equals(d.FileName, file.Name, StringComparison.OrdinalIgnoreCase) &&
                             string.Equals(d.ResourceName, $"{resource.Tag}-{resource.Number}", StringComparison.OrdinalIgnoreCase));
 
+                        byte[] replacement = resource.ModifiedData;
                         if (doc != null)
                         {
                             doc.TransliterationRules = CurrentProject.TransliterationRules ?? new List<TransliterationRule>();
                             doc.ApplyStringChanges();
-                            updatedBytes = _resourceService.ReplaceResource(gff, resource.Tag, resource.Number, doc.newBytes);
+                            replacement = doc.newBytes;
+                        }
+
+                        if (replacement != null)
+                        {
+                            updatedBytes = _resourceService.ReplaceResource(gff, resource.Tag, resource.Number, replacement);
                             gff = _resourceService.ParseGffFile(updatedBytes); // refresh tables for next replace
                         }
                     }

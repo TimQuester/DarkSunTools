@@ -17,7 +17,19 @@ namespace DarkSunRE.ViewModels
         private NameResource _nameResource;
         private ObservableCollection<NameEntry> _entries;
         private NameEntry _selectedEntry;
-        private bool _isModified;
+        private ResourceInfo _resourceInfo;
+        private List<DSunTools.Common.Gpl.GplTransliterationRule> _transliterationRules = new();
+        private string _validationError = string.Empty;
+
+        public string ValidationError
+        {
+            get => _validationError;
+            private set
+            {
+                _validationError = value;
+                OnPropertyChanged();
+            }
+        }
 
         public NameResource NameResource
         {
@@ -53,17 +65,6 @@ namespace DarkSunRE.ViewModels
             }
         }
 
-        public bool IsModified
-        {
-            get => _isModified;
-            set
-            {
-                _isModified = value;
-                OnPropertyChanged();
-                OnPropertyChanged(nameof(DisplayTitle));
-            }
-        }
-
         // Commands
         public ICommand AddEntryCommand { get; private set; }
         public ICommand RemoveEntryCommand { get; private set; }
@@ -78,12 +79,20 @@ namespace DarkSunRE.ViewModels
             
             AddEntryCommand = new RelayCommand(AddEntry);
             RemoveEntryCommand = new RelayCommand(RemoveEntry, () => SelectedEntry != null);
-            SaveCommand = new RelayCommand(Save, () => IsModified);
+            SaveCommand = new RelayCommand(Save);
         }
 
-        public void Initialize(NameResource nameResource, string fileName)
+        public void Initialize(NameResource nameResource, string fileName, ResourceInfo resourceInfo = null, IEnumerable<TransliterationRule>? rules = null)
         {
             NameResource = nameResource;
+            _resourceInfo = resourceInfo;
+            _transliterationRules = rules?
+                .Where(rule => rule != null)
+                .Select(rule => new DSunTools.Common.Gpl.GplTransliterationRule(rule.From ?? string.Empty, rule.To ?? string.Empty))
+                .ToList() ?? new List<DSunTools.Common.Gpl.GplTransliterationRule>();
+            foreach (NameEntry entry in Entries)
+                entry.MainName = DSunTools.Common.Gpl.GplTransliteration.DecodeToDisplay(entry.MainName, _transliterationRules);
+
             File = fileName;
             IsModified = false;
             
@@ -124,17 +133,28 @@ namespace DarkSunRE.ViewModels
 
         public override void Save()
         {
-            // Обновляем исходный ресурс данными из Entries
-            if (_nameResource != null)
+            if (_nameResource == null)
+                return;
+
+            _nameResource.Entries.Clear();
+            foreach (var entry in Entries)
+                _nameResource.Entries.Add(entry);
+
+            try
             {
-                _nameResource.Entries.Clear();
-                foreach (var entry in Entries)
+                if (_resourceInfo != null)
                 {
-                    _nameResource.Entries.Add(entry);
+                    _resourceInfo.ModifiedData = _nameResource.SaveToBytes(_transliterationRules);
+                    _resourceInfo.IsModified = true;
                 }
+
+                ValidationError = string.Empty;
+                IsModified = false;
             }
-            
-            IsModified = false;
+            catch (InvalidOperationException ex)
+            {
+                ValidationError = ex.Message;
+            }
         }
 
         public override void Reload()
@@ -142,7 +162,12 @@ namespace DarkSunRE.ViewModels
             if (_nameResource != null)
             {
                 Entries = new ObservableCollection<NameEntry>(_nameResource.Entries);
+                foreach (NameEntry entry in Entries)
+                    entry.MainName = DSunTools.Common.Gpl.GplTransliteration.DecodeToDisplay(entry.MainName, _transliterationRules);
             }
+
+            ValidationError = string.Empty;
+            IsModified = false;
         }
     }
 }

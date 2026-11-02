@@ -28,7 +28,6 @@ namespace DarkSunRE.Services
         public event EventHandler<ResourceEventArgs> ResourceChanged;
         public event EventHandler<GffFileEventArgs> GffFileChanged;
         public event EventHandler<ProjectValidationEventArgs> ProjectValidated;
-        public event EventHandler<GitOperationEventArgs> GitOperationPerformed;
         #endregion
 
         protected virtual void OnProjectChanged(ProjectAction action, Project project)
@@ -37,9 +36,9 @@ namespace DarkSunRE.Services
         }
 
         // Synchronous compatibility wrapper - delegates to async implementation
-        public Project CreateNewProject(string originalPath, string modifiedPath, string gitPath, ProjectType gameType)
+        public Project CreateNewProject(string originalPath, string modifiedPath, string jsonPath, ProjectType gameType)
         {
-            return CreateNewProjectAsync(originalPath, modifiedPath, gitPath, gameType, CancellationToken.None).GetAwaiter().GetResult();
+            return CreateNewProjectAsync(originalPath, modifiedPath, jsonPath, gameType, CancellationToken.None).GetAwaiter().GetResult();
         }
 
         // Async implementation of project creation (copies files and loads resources)
@@ -64,8 +63,6 @@ namespace DarkSunRE.Services
 
             if (jsonPath != null && !_fileService.DirectoryExists(jsonPath))
                 _fileService.CreateDirectory(jsonPath);
-
-            var expectedFiles = _fileService.GetExpectedGameFiles(gameType);
 
             // Copy files asynchronously
             //foreach (var file in expectedFiles)
@@ -110,9 +107,12 @@ namespace DarkSunRE.Services
             switch (projectType)
             {
                 case ProjectType.DarkSunShatteredLands:
+                case ProjectType.DarkSunWakeOfTheRavager:
                     return await LoadDSSLFilesAsync(originalGamePath, progress, cancellationToken).ConfigureAwait(false);
+                case ProjectType.AlQuadin:
+                    throw new NotSupportedException("Al-Qadim uses a different resource container format and is not supported yet.");
                 default:
-                    return new List<ResourceFile>();
+                    throw new ArgumentOutOfRangeException(nameof(projectType), projectType, "Unknown game type.");
             }
         }
 

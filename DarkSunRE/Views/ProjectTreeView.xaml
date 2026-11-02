@@ -10,6 +10,8 @@
         <Style x:Key="GenerateFileMenuItemStyle" TargetType="MenuItem"/>
         <Style x:Key="SaveAllJsonsMenuItemStyle" TargetType="MenuItem"/>
         <Style x:Key="LoadAllJsonsMenuItemStyle" TargetType="MenuItem"/>
+        <Style x:Key="SaveAllTextJsonMenuItemStyle" TargetType="MenuItem"/>
+        <Style x:Key="LoadAllTextJsonMenuItemStyle" TargetType="MenuItem"/>
         <ContextMenu x:Key="GffFileContextMenu">
             <MenuItem Header="Generate new file" Style="{StaticResource GenerateFileMenuItemStyle}"
                       Command="{Binding DataContext.GenerateNewFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
@@ -20,6 +22,13 @@
                     CommandParameter="{Binding}"/>
             <MenuItem Header="Load all JSONs" Style="{StaticResource LoadAllJsonsMenuItemStyle}"
                     Command="{Binding DataContext.LoadAllJsonsCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                    CommandParameter="{Binding}"/>
+            <Separator/>
+            <MenuItem Header="Export all text JSON" Style="{StaticResource SaveAllTextJsonMenuItemStyle}"
+                    Command="{Binding DataContext.SaveAllTextJsonCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                    CommandParameter="{Binding}"/>
+            <MenuItem Header="Import all text JSON" Style="{StaticResource LoadAllTextJsonMenuItemStyle}"
+                    Command="{Binding DataContext.LoadAllTextJsonCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                     CommandParameter="{Binding}"/>
         </ContextMenu>
     </UserControl.Resources>

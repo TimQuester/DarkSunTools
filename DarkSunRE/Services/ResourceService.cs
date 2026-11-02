@@ -357,30 +357,17 @@ namespace DarkSunRE.Services
         {
             if (content is string text)
             {
-                try
-                {
-                    return Encoding.ASCII.GetBytes(text);
-                }
-                catch
-                {
-                    return Array.Empty<byte>();
-                }
+                if (text.Any(character => character > byte.MaxValue))
+                    throw new InvalidOperationException("Text contains a character that cannot be encoded as a one-byte game glyph.");
+
+                return Encoding.Latin1.GetBytes(text);
             }
             return content as byte[] ?? Array.Empty<byte>();
         }
 
         private object DecodeTextResource(byte[] data)
         {
-            try
-            {
-                // Пытаемся декодировать как ASCII текст
-                return Encoding.ASCII.GetString(data);
-            }
-            catch
-            {
-                // В случае ошибки возвращаем сырые данные
-                return data;
-            }
+            return Encoding.Latin1.GetString(data);
         }
 
         private object DecodeFontResource(byte[] data)
@@ -415,7 +402,6 @@ namespace DarkSunRE.Services
 
         private DocumentViewModel CreateTextResourceViewModel(ResourceInfo resourceInfo, byte[] data)
         {
-            // Реализация для текстовых ресурсов
             return new TextResourceViewModel();
         }
 

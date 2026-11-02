@@ -226,6 +226,12 @@ namespace DarkSunRE.ViewModels
                 return false;
             }
 
+            if (SelectedGame?.Type == ProjectType.AlQuadin)
+            {
+                _statusService.ShowError("Al-Qadim's resource container format is not supported yet.");
+                return false;
+            }
+
             if (!_fileService.DirectoryExists(OriginalGamePath))
             {
                 _statusService.ShowError("Original game path does not exist");

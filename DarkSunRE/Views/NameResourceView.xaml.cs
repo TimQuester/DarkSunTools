@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using DarkSunRE.ViewModels;
 using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Input;
@@ -23,6 +24,12 @@ namespace DarkSunRE.Views
         public NameResourceView()
         {
             InitializeComponent();
+        }
+
+        private void DataGrid_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
+        {
+            if (DataContext is NameResourceViewModel viewModel)
+                viewModel.IsModified = true;
         }
     }
 }

@@ -6,20 +6,25 @@
              xmlns:local="clr-namespace:DarkSunRE.Views"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
-    <Grid>
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="5">
+            <TextBlock Text="{Binding ValidationError}" Foreground="Firebrick" VerticalAlignment="Center" Margin="6,0" />
+            <Button Content="Save" Command="{Binding SaveCommand}" Margin="4" Padding="12,4" />
+        </StackPanel>
         <DataGrid
             ItemsSource="{Binding Entries}"
             SelectedItem="{Binding SelectedEntry}"
             AutoGenerateColumns="False"
             CanUserAddRows="False"
             CanUserDeleteRows="False"
+            CellEditEnding="DataGrid_CellEditEnding"
             Margin="5">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Main Name" Binding="{Binding MainName}" Width="*"/>
-                <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*"/>
+                <DataGridTextColumn Header="Main Name" Binding="{Binding MainName, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                <DataGridTextColumn Header="Path" Binding="{Binding Path, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
                 <DataGridTextColumn Header="Index" Binding="{Binding Index}" Width="100"/>
                 <DataGridTextColumn Header="Flag" Binding="{Binding Flag}" Width="100"/>
             </DataGrid.Columns>
         </DataGrid>
-    </Grid>
+    </DockPanel>
 </UserControl>

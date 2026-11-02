@@ -29,11 +29,6 @@ namespace DarkSunRE.Services
         // Состояния проекта
         Modified,       // Проект был изменен
         Clean,          // Все изменения сохранены
-        ValidationError,
-
-        // Git операции
-        GitInitialized,
-        GitCommitted,
-        GitReverted
+        ValidationError
     }
 }

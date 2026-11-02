@@ -1,0 +1,19 @@
+<UserControl x:Class="DarkSunRE.Views.TextResourceView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="6">
+            <TextBlock Text="{Binding ValidationError}" Foreground="Firebrick" VerticalAlignment="Center" Margin="6,0" />
+            <Button Content="Reload" Command="{Binding ReloadCommand}" Margin="4" Padding="12,4" />
+            <Button Content="Save" Command="{Binding SaveCommand}" Margin="4" Padding="12,4" />
+        </StackPanel>
+        <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}"
+                 AcceptsReturn="True"
+                 AcceptsTab="True"
+                 FontFamily="Consolas"
+                 HorizontalScrollBarVisibility="Auto"
+                 VerticalScrollBarVisibility="Auto"
+                 TextWrapping="NoWrap"
+                 Margin="6" />
+    </DockPanel>
+</UserControl>

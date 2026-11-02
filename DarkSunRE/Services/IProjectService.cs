@@ -14,9 +14,8 @@ namespace DarkSunRE.Services
         event EventHandler<ResourceEventArgs> ResourceChanged;
         event EventHandler<GffFileEventArgs> GffFileChanged;
         event EventHandler<ProjectValidationEventArgs> ProjectValidated;
-        event EventHandler<GitOperationEventArgs> GitOperationPerformed;
         #endregion
-        public Project CreateNewProject(string originalPath, string modifiedPath, string gitPath, ProjectType gameType);
+        public Project CreateNewProject(string originalPath, string modifiedPath, string jsonPath, ProjectType gameType);
         Project LoadProject(string projectFilePath);
         void SaveProject(Project project);
         void ScanGameResources(Project project);

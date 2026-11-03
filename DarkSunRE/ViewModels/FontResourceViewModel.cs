@@ -238,16 +238,10 @@ namespace DarkSunRE.ViewModels
                 {
                     foreach (var character in characters)
                     {
-                        if (!character.IsControlCharacter)
-                        {
-                            // Find transliteration rule for this character
-                            var rule = _project.TransliterationRules
-                                .FirstOrDefault(r => r.From == character.LatinCharacter);
-                            if (rule != null)
-                            {
-                                character.Transliteration = rule.To;
-                            }
-                        }
+                        var rule = _project.TransliterationRules
+                            .FirstOrDefault(candidate => candidate.From?.Length == 1 && candidate.From[0] == character.CharCode);
+                        if (rule != null)
+                            character.Transliteration = rule.To;
                     }
                 }
                 

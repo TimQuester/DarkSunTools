@@ -35,7 +35,7 @@
                              ToolTip="{Binding ValidationError}"/>
                 <TextBlock Text="{Binding LengthDisplay}"
                            Padding="2" Grid.Column="1" Grid.Row="1"
-                           ToolTip="Current length / maximum length">
+                           ToolTip="Length after transliteration / maximum game-character length">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
                             <Style.Triggers>

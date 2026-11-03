@@ -90,7 +90,13 @@ namespace DarkSunRE.ViewModels
         private static string BuildTableText(IEnumerable<TransliterationRule> rules)
         {
             if (rules == null) return string.Empty;
-            return string.Join(";", rules.Select(r => $"{r.From}={r.To}"));
+            return string.Join(";", rules.Select(rule =>
+            {
+                string source = rule.From?.Length == 1 && rule.From[0] > 0x7E
+                    ? $"0x{(int)rule.From[0]:X2}"
+                    : rule.From;
+                return $"{source}={rule.To}";
+            }));
         }
 
         private static List<TransliterationRule> ParseTable(string text)
@@ -98,16 +104,21 @@ namespace DarkSunRE.ViewModels
             var result = new List<TransliterationRule>();
             if (string.IsNullOrWhiteSpace(text)) return result;
 
-            var segments = text.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            var segments = text.Split(new[] { ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
             foreach (var segment in segments)
             {
                 var line = segment.Trim();
                 if (line.Length == 0) continue;
                 var parts = line.Split(new[] { '=' }, 2);
-                if (parts.Length == 2)
-                {
-                    result.Add(new TransliterationRule { From = parts[0], To = parts[1] });
-                }
+                if (parts.Length != 2)
+                    continue;
+
+                string source = parts[0].Trim();
+                if (source.StartsWith("0x", StringComparison.OrdinalIgnoreCase) &&
+                    byte.TryParse(source.AsSpan(2), System.Globalization.NumberStyles.HexNumber, null, out byte code))
+                    source = ((char)code).ToString();
+
+                result.Add(new TransliterationRule { From = source, To = parts[1].Trim() });
             }
             return result;
         }

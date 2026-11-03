@@ -38,16 +38,16 @@ namespace DarkSunRE.Models
         /// <summary>True for strings the fixed-length editor can rewrite.</summary>
         public bool IsEditable => SubType == GplStringSubType.Compressed;
 
-        /// <summary>Maximum number of characters this span can hold.</summary>
+        /// <summary>Maximum number of game characters this span can hold.</summary>
         public int MaxLength => OriginalSize;
 
-        public bool IsOverlong => NewString != null && NewString.Length > MaxLength;
+        public bool IsOverlong => NewString != null && NewSize > MaxLength;
 
         [JsonIgnore]
-        public bool IsUnderlong => NewString != null && NewString.Length < MaxLength;
+        public bool IsUnderlong => NewString != null && NewSize < MaxLength;
 
         [JsonIgnore]
-        public bool HasLengthMismatch => NewString != null && NewString.Length != MaxLength;
+        public bool HasLengthMismatch => NewString != null && NewSize != MaxLength;
 
         /// <summary>Current and maximum character counts for the editor.</summary>
         [JsonIgnore]
@@ -92,9 +92,13 @@ namespace DarkSunRE.Models
             get => _newSize;
             set
             {
+                if (_newSize == value) return;
                 _newSize = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(LengthDisplay));
+                OnPropertyChanged(nameof(IsOverlong));
+                OnPropertyChanged(nameof(IsUnderlong));
+                OnPropertyChanged(nameof(HasLengthMismatch));
             }
         }
 

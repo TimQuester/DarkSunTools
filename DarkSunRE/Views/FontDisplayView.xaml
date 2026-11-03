@@ -49,8 +49,8 @@
                     <DataTemplate>
                         <Border BorderBrush="LightGray" BorderThickness="1" Margin="2" Padding="5">
                             <StackPanel Orientation="Vertical">
-                                <!-- Latin character -->
-                                <TextBlock Text="{Binding LatinCharacter}"
+                                <!-- Game glyph code -->
+                                <TextBlock Text="{Binding GlyphLabel}"
                                            HorizontalAlignment="Center"
                                            FontWeight="Bold"
                                            FontSize="{Binding DataContext.CharacterFontSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"/>

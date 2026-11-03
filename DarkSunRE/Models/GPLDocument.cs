@@ -191,19 +191,21 @@ namespace DarkSunRE.Models
             // The rules are stored as "game glyph = displayed character"
             // (the font preview shows them that way), so encoding a
             // Cyrillic translation goes through the reverse map.
+            // GPL is 7-bit packed; high-byte aliases are only valid for TEXT/NAME resources.
             newString = GplTransliteration.EncodeToGameCharset(
                 newString,
                 transliterationRules?
-                    .Where(r => r != null)
-                    .Select(r => new GplTransliterationRule(r.From ?? string.Empty, r.To ?? string.Empty))
+                    .Where(rule => rule != null && (rule.From?.Length != 1 || rule.From[0] <= 0x7F))
+                    .Select(rule => new GplTransliterationRule(rule.From ?? string.Empty, rule.To ?? string.Empty))
                     .ToList());
+            gpl.NewSize = newString.Length;
 
             if (string.Equals(originalString, newString, StringComparison.Ordinal))
                 return true;
 
-            if (newString.Length != originalString.Length)
+            if (gpl.NewSize != originalString.Length)
             {
-                error = $"length {newString.Length} != original {originalString.Length}; " +
+                error = $"length {gpl.NewSize} != original {originalString.Length}; " +
                         "fixed-length mode refuses to resize a span. " +
                         "Use a translation of the same character count (pad with spaces if needed).";
                 return false;

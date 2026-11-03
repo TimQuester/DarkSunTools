@@ -18,6 +18,7 @@ namespace DarkSunRE.Models
         public string Transliteration { get; set; }
         
         public string LatinCharacter => CharCode is >= 32 and <= 126 ? ((char)CharCode).ToString() : string.Empty;
+        public string GlyphLabel => LatinCharacter.Length > 0 ? LatinCharacter : $"0x{CharCode:X2}";
 
         public bool IsControlCharacter => CharCode < 32 || CharCode == 127;
         

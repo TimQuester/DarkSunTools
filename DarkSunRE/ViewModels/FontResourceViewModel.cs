@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -12,6 +13,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using DSunTools.Common.Image;
 using DSunTools.Common.Gff;
+using DSunTools.Common.Font;
 
 namespace DarkSunRE.ViewModels
 {
@@ -27,6 +29,8 @@ namespace DarkSunRE.ViewModels
         private ResourceInfo _resourceInfo;
         private FontParser _fontParser;
         private byte[] _originalFontData = Array.Empty<byte>();
+        private Dictionary<int, FontCharacter> _baseCharacters = new();
+        private readonly IStatusService _statusService;
         private string _validationError = string.Empty;
         private bool _isPixelEditing;
         private Palette _selectedPalette;
@@ -69,6 +73,10 @@ namespace DarkSunRE.ViewModels
 
         public ICommand SaveCommand { get; }
         public ICommand ReloadCommand { get; }
+        public ICommand ExportAllGlyphsCommand { get; }
+
+        public string GlyphOverridesPath => GetGlyphOverridesPath();
+        public string GlyphExportPath => GetGlyphExportPath();
 
         public ObservableCollection<FontCharacter> Characters
         {
@@ -141,8 +149,9 @@ namespace DarkSunRE.ViewModels
         public ICommand ZoomOutCommand => _zoomOutCommand ?? (_zoomOutCommand = new RelayCommand(ZoomOut));
         public ICommand ResetZoomCommand => _resetZoomCommand ?? (_resetZoomCommand = new RelayCommand(ResetZoom));
 
-        public FontResourceViewModel()
+        public FontResourceViewModel(IStatusService statusService)
         {
+            _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
             Title = "Font";
             ToolTip = "Font Resource";
             CanClose = true;
@@ -151,8 +160,9 @@ namespace DarkSunRE.ViewModels
             _zoomInCommand = new RelayCommand(ZoomIn);
             _zoomOutCommand = new RelayCommand(ZoomOut);
             _resetZoomCommand = new RelayCommand(ResetZoom);
-            SaveCommand = new RelayCommand(Save, () => IsModified && _resourceInfo != null && _fontParser != null);
+            SaveCommand = new RelayCommand(Save, () => IsModified && _resourceInfo != null && _fontParser != null && !string.IsNullOrEmpty(GetGlyphOverridesPath()) && string.IsNullOrEmpty(ValidationError));
             ReloadCommand = new RelayCommand(Reload, () => IsModified);
+            ExportAllGlyphsCommand = new RelayCommand(ExportAllGlyphs, CanExportAllGlyphs);
         }
 
         public void Initialize(Project project, ResourceInfo resourceInfo, byte[] fontData)
@@ -231,7 +241,9 @@ namespace DarkSunRE.ViewModels
             {
                 _fontParser = new FontParser();
                 var characters = _fontParser.ParseFontData(_fontData);
+                _baseCharacters = characters.ToDictionary(character => character.CharCode, CloneGlyph);
                 ValidationError = string.Empty;
+                ApplyGlyphOverrides(characters);
 
                 // Apply transliteration if available
                 if (_project?.TransliterationRules != null)
@@ -244,7 +256,7 @@ namespace DarkSunRE.ViewModels
                             character.Transliteration = rule.To;
                     }
                 }
-                
+
                 Characters = new ObservableCollection<FontCharacter>(characters);
                 RenderAllCharacterImages();
             }
@@ -267,6 +279,7 @@ namespace DarkSunRE.ViewModels
                 return;
 
             glyph.Pixels[y, x] = glyph.Pixels[y, x] == 0 ? (byte)0xFE : (byte)0;
+            glyph.IsOverridden = !MatchesBaseGlyph(glyph);
             RenderAllCharacterImages();
             IsModified = true;
             CommandManager.InvalidateRequerySuggested();
@@ -290,6 +303,7 @@ namespace DarkSunRE.ViewModels
                     Width = character.Width,
                     Pixels = character.Pixels,
                     Transliteration = character.Transliteration,
+                    IsOverridden = character.IsOverridden,
                     Image = RenderCharacterImage(character)
                 };
                 updatedCharacters.Add(updatedCharacter);
@@ -299,6 +313,203 @@ namespace DarkSunRE.ViewModels
             // Replace the entire collection to force UI update
             Characters = new ObservableCollection<FontCharacter>(updatedCharacters);
             System.Diagnostics.Debug.WriteLine($"Rendered {renderedCount} character images, IsTransparent = {_isTransparent}");
+        }
+
+        private void ApplyGlyphOverrides(List<FontCharacter> characters)
+        {
+            string directory = GetGlyphOverridesPath();
+            if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
+                return;
+
+            var errors = new List<string>();
+            foreach (FontCharacter character in characters)
+            {
+                string path = Path.Combine(directory, $"glyph_{character.CharCode}.png");
+                if (!System.IO.File.Exists(path))
+                    continue;
+
+                try
+                {
+                    FontCharacter replacement = LoadGlyphPng(path, character.CharCode);
+                    character.Width = replacement.Width;
+                    character.Pixels = replacement.Pixels;
+                    character.IsOverridden = !MatchesBaseGlyph(character);
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"{Path.GetFileName(path)}: {ex.Message}");
+                }
+            }
+
+            if (errors.Count > 0)
+                ValidationError = "Could not load glyph overrides: " + string.Join("; ", errors);
+        }
+
+        private static FontCharacter LoadGlyphPng(string path, int characterCode)
+        {
+            BitmapDecoder decoder = BitmapDecoder.Create(
+                new Uri(path, UriKind.Absolute), BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+            if (decoder.Frames.Count == 0)
+                throw new InvalidDataException("The PNG contains no image frame.");
+
+            BitmapSource source = decoder.Frames[0];
+            if (source.PixelHeight != FontResourceCodec.GlyphHeight || source.PixelWidth is < 1 or > ushort.MaxValue)
+                throw new InvalidDataException($"Glyph PNG must be 1..65535 pixels wide and {FontResourceCodec.GlyphHeight} pixels high.");
+
+            var grayscale = new FormatConvertedBitmap(source, PixelFormats.Gray8, null, 0);
+            int width = grayscale.PixelWidth;
+            byte[] flatPixels = new byte[checked(width * FontResourceCodec.GlyphHeight)];
+            grayscale.CopyPixels(flatPixels, width, 0);
+            var pixels = new byte[FontResourceCodec.GlyphHeight, width];
+            for (int y = 0; y < FontResourceCodec.GlyphHeight; y++)
+            {
+                for (int x = 0; x < width; x++)
+                    pixels[y, x] = flatPixels[y * width + x];
+            }
+
+            return new FontCharacter { CharCode = characterCode, Width = width, Pixels = pixels };
+        }
+
+        private static void SaveGlyphPng(FontCharacter glyph, string path)
+        {
+            if (glyph.Width <= 0 || glyph.Width > ushort.MaxValue || glyph.Pixels == null ||
+                glyph.Pixels.GetLength(0) != FontResourceCodec.GlyphHeight || glyph.Pixels.GetLength(1) != glyph.Width)
+            {
+                throw new InvalidDataException($"Glyph {glyph.CharCode:X2} has invalid pixel dimensions.");
+            }
+
+            byte[] flatPixels = new byte[checked(glyph.Width * FontResourceCodec.GlyphHeight)];
+            for (int y = 0; y < FontResourceCodec.GlyphHeight; y++)
+            {
+                for (int x = 0; x < glyph.Width; x++)
+                    flatPixels[y * glyph.Width + x] = glyph.Pixels[y, x];
+            }
+
+            var bitmap = new WriteableBitmap(glyph.Width, FontResourceCodec.GlyphHeight, 96, 96, PixelFormats.Gray8, null);
+            bitmap.WritePixels(new System.Windows.Int32Rect(0, 0, glyph.Width, FontResourceCodec.GlyphHeight), flatPixels, glyph.Width, 0);
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using var stream = System.IO.File.Create(path);
+            encoder.Save(stream);
+        }
+
+        private static FontCharacter CloneGlyph(FontCharacter glyph)
+        {
+            var pixels = new byte[glyph.Pixels.GetLength(0), glyph.Pixels.GetLength(1)];
+            Array.Copy(glyph.Pixels, pixels, glyph.Pixels.Length);
+            return new FontCharacter
+            {
+                CharCode = glyph.CharCode,
+                Width = glyph.Width,
+                Pixels = pixels,
+                Transliteration = glyph.Transliteration,
+                IsOverridden = glyph.IsOverridden
+            };
+        }
+
+        private bool MatchesBaseGlyph(FontCharacter glyph)
+        {
+            if (!_baseCharacters.TryGetValue(glyph.CharCode, out FontCharacter original) ||
+                glyph.Width != original.Width || glyph.Pixels == null || original.Pixels == null ||
+                glyph.Pixels.GetLength(0) != original.Pixels.GetLength(0) ||
+                glyph.Pixels.GetLength(1) != original.Pixels.GetLength(1))
+            {
+                return false;
+            }
+
+            for (int y = 0; y < glyph.Pixels.GetLength(0); y++)
+            {
+                for (int x = 0; x < glyph.Pixels.GetLength(1); x++)
+                {
+                    if (glyph.Pixels[y, x] != original.Pixels[y, x])
+                        return false;
+                }
+            }
+
+            return true;
+        }
+
+        private string GetGlyphOverridesPath()
+        {
+            return string.IsNullOrWhiteSpace(_project?.ModifiedGamePath)
+                ? string.Empty
+                : Path.Combine(_project.ModifiedGamePath, "Glyphs", "Overrides");
+        }
+
+        private string GetGlyphExportPath()
+        {
+            return string.IsNullOrWhiteSpace(_project?.ModifiedGamePath)
+                ? string.Empty
+                : Path.Combine(_project.ModifiedGamePath, "Glyphs", "Export");
+        }
+
+        private bool CanExportAllGlyphs()
+        {
+            return Characters?.Count == FontResourceCodec.GlyphCount && !string.IsNullOrEmpty(GetGlyphExportPath());
+        }
+
+        private void ExportAllGlyphs()
+        {
+            try
+            {
+                string directory = GetGlyphExportPath();
+                if (string.IsNullOrEmpty(directory))
+                    throw new InvalidOperationException("The project output folder is not configured.");
+
+                Directory.CreateDirectory(directory);
+                int exportedCount = 0;
+                var manifest = new StringBuilder("Code,Width,File");
+                manifest.AppendLine();
+                foreach (FontCharacter character in Characters)
+                {
+                    string fileName = character.Width == 0 ? string.Empty : $"glyph_{character.CharCode}.png";
+                    manifest.AppendLine($"{character.CharCode},{character.Width},{fileName}");
+
+                    string filePath = Path.Combine(directory, $"glyph_{character.CharCode}.png");
+                    if (character.Width == 0)
+                    {
+                        if (System.IO.File.Exists(filePath))
+                            System.IO.File.Delete(filePath);
+                        continue;
+                    }
+
+                    SaveGlyphPng(character, filePath);
+                    exportedCount++;
+                }
+
+                System.IO.File.WriteAllText(Path.Combine(directory, "glyph_widths.csv"), manifest.ToString());
+                System.IO.File.WriteAllText(Path.Combine(directory, "README.txt"),
+                    "glyph_widths.csv lists all 256 glyph codes and widths. Non-empty glyphs are 8-bit grayscale PNGs named glyph_<code>.png, exactly 9 pixels high; each grayscale value is the original pixel value. " +
+                    "Zero-width glyphs have no PNG because PNG images cannot have zero width. Missing PNGs leave the original glyph unchanged. Copy selected PNGs into the project's Glyphs\\Overrides folder to use them as replacements.\r\n");
+                _statusService.ShowSuccess($"Exported {Characters.Count} glyph entries ({exportedCount} PNGs) to {directory}");
+            }
+            catch (Exception ex)
+            {
+                _statusService.ShowError($"Failed to export glyphs: {ex.Message}", ex);
+            }
+        }
+
+        private void PersistGlyphOverrides()
+        {
+            string directory = GetGlyphOverridesPath();
+            var changedGlyphs = Characters.Where(glyph => !MatchesBaseGlyph(glyph)).ToList();
+            if (changedGlyphs.Count > 0)
+                Directory.CreateDirectory(directory);
+
+            foreach (FontCharacter glyph in Characters)
+            {
+                string path = Path.Combine(directory, $"glyph_{glyph.CharCode}.png");
+                if (MatchesBaseGlyph(glyph) || glyph.Width == 0)
+                {
+                    if (System.IO.File.Exists(path))
+                        System.IO.File.Delete(path);
+                    glyph.IsOverridden = false;
+                    continue;
+                }
+
+                SaveGlyphPng(glyph, path);
+                glyph.IsOverridden = true;
+            }
         }
 
         private void ZoomIn()
@@ -407,25 +618,42 @@ namespace DarkSunRE.ViewModels
 
         public override void Reload()
         {
+            ValidationError = string.Empty;
             FontData = (byte[])_originalFontData.Clone();
             IsModified = false;
-            ValidationError = string.Empty;
             CommandManager.InvalidateRequerySuggested();
         }
 
         public override void Save()
         {
             if (_resourceInfo == null || _fontParser == null)
-                throw new InvalidOperationException("The FONT resource is not initialized or could not be parsed.");
+            {
+                ValidationError = "The FONT resource is not initialized or could not be parsed.";
+                return;
+            }
 
-            byte[] updatedData = _fontParser.BuildFontData(Characters.ToList());
-            _resourceInfo.ModifiedData = updatedData;
-            _resourceInfo.IsModified = true;
-            _originalFontData = (byte[])updatedData.Clone();
-            FontData = (byte[])updatedData.Clone();
-            IsModified = false;
-            ValidationError = string.Empty;
-            CommandManager.InvalidateRequerySuggested();
+            if (string.IsNullOrEmpty(GetGlyphOverridesPath()))
+            {
+                ValidationError = "The project output folder is not configured.";
+                return;
+            }
+
+            try
+            {
+                byte[] updatedData = _fontParser.BuildFontData(Characters.ToList());
+                PersistGlyphOverrides();
+                _resourceInfo.ModifiedData = updatedData;
+                _resourceInfo.IsModified = true;
+                IsModified = false;
+                ValidationError = string.Empty;
+                _statusService.ShowSuccess($"Font built; glyph overrides saved to {GetGlyphOverridesPath()}");
+                CommandManager.InvalidateRequerySuggested();
+            }
+            catch (Exception ex)
+            {
+                ValidationError = $"Failed to save font: {ex.Message}";
+                System.Diagnostics.Debug.WriteLine(ValidationError);
+            }
         }
     }
 }

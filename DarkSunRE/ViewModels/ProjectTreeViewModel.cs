@@ -719,9 +719,6 @@ namespace DarkSunRE.ViewModels
                 var outputPath = Path.Combine(CurrentProject.ModifiedGamePath, file.Name);
                 File.WriteAllBytes(outputPath, updatedBytes);
 
-                // refresh in-memory data for subsequent openings
-                file.Data = updatedBytes;
-
                 _statusService.ShowSuccess($"Generated file: {outputPath}");
             }
             catch (Exception ex)

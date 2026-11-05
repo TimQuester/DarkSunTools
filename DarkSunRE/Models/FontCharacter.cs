@@ -13,7 +13,8 @@ namespace DarkSunRE.Models
         public int Width { get; set; }
         public byte[,] Pixels { get; set; }
         public bool IsEmpty => Width == 0 || Pixels == null;
-        
+        public bool IsOverridden { get; set; }
+
         // Transliteration for the character if available
         public string Transliteration { get; set; }
         

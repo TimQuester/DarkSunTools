@@ -103,27 +103,9 @@ namespace DarkSunRE
                 }
                 else if (resource.Type == ResourceType.Font)
                 {
-                    // Для шрифтов создаем FontResourceViewModel
-                    byte[] resourceBytes = null;
-                    
-                    // prefer on-disk modified file if it exists
-                    if (!string.IsNullOrWhiteSpace(project.ModifiedGamePath))
-                    {
-                        var modifiedPath = Path.Combine(project.ModifiedGamePath, container.Name);
-                        if (File.Exists(modifiedPath))
-                        {
-                            var gffBytes = File.ReadAllBytes(modifiedPath);
-                            var gff = _resourceService.ParseGffFile(gffBytes);
-                            resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
-                        }
-                    }
-                    
-                    if (resourceBytes == null)
-                    {
-                        var gff = _resourceService.ParseGffFile(container.Data);
-                        resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
-                    }
-                    
+                    // Always use the original game resource as the base font; project glyph overrides are layered by the editor.
+                    var originalGff = _resourceService.ParseGffFile(container.Data);
+                    byte[] resourceBytes = _resourceService.GetResourceData(originalGff, resource.Tag, resource.Number);
                     documentViewModel = _resourceService.CreateEditorViewModel(resource, resourceBytes);
                     
                     // Для шрифтов инициализируем вьюмодель с проектом и информацией о ресурсе
@@ -193,24 +175,17 @@ namespace DarkSunRE
                 }
                 else
                 {
-                    // Для других типов ресурсов (GPL и т.д.) используем старую логику
-                    byte[] gffBytes = container.Data;
-                    if (!string.IsNullOrWhiteSpace(project.ModifiedGamePath))
+                    string resourceName = $"{resource.Tag}-{resource.Number}";
+                    document = existingDoc;
+                    if (document == null)
                     {
-                        var modifiedPath = Path.Combine(project.ModifiedGamePath, container.Name);
-                        if (File.Exists(modifiedPath))
-                        {
-                            gffBytes = File.ReadAllBytes(modifiedPath);
-                        }
+                        var originalGff = _resourceService.ParseGffFile(container.Data);
+                        var resourceData = _resourceService.GetResourceData(originalGff, resource.Tag, resource.Number);
+                        string docName = $"{container.Name}:{resourceName}";
+                        document = new GPLDocument(resourceData, docName, container.FullPath, container.Name, resourceName, project.TransliterationRules);
+                        project.OpenedDocuments.Add(document);
                     }
 
-                    var gff = _resourceService.ParseGffFile(gffBytes);
-                    var resourceData = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
-
-                    string docName = $"{container.Name}:{resource.Tag}-{resource.Number}";
-                    string resourceName = $"{resource.Tag}-{resource.Number}";
-                    document = new GPLDocument(resourceData, docName, container.FullPath, container.Name, resourceName, project.TransliterationRules);
-                    project.OpenedDocuments.Add(document);
                     documentViewModel = new GplDocumentViewModel(document);
                 }
 

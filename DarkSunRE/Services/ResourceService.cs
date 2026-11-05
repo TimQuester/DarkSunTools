@@ -13,6 +13,13 @@ namespace DarkSunRE.Services
 {
     public class ResourceService : IResourceService
     {
+        private readonly IStatusService _statusService;
+
+        public ResourceService(IStatusService statusService)
+        {
+            _statusService = statusService ?? throw new ArgumentNullException(nameof(statusService));
+        }
+
         public bool CanEditResource(ResourceType resourceType)
         {
             // Определяем, какие типы ресурсов можно редактировать
@@ -423,10 +430,7 @@ namespace DarkSunRE.Services
 
         private DocumentViewModel CreateFontResourceViewModel(ResourceInfo resourceInfo, byte[] data)
         {
-            // Реализация для шрифтов
-            var viewModel = new FontResourceViewModel();
-            // Note: This will be initialized properly in MainWindow when the project context is available
-            return viewModel;
+            return new FontResourceViewModel(_statusService);
         }
 
         private DocumentViewModel CreateRawDataViewModel(ResourceInfo resourceInfo, byte[] data)

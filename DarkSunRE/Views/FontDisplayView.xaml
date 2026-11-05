@@ -13,7 +13,7 @@
         </Grid.RowDefinitions>
         
         <!-- Control panel -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="5">
+        <WrapPanel Grid.Row="0" Margin="5">
             <TextBlock Text="Palette:" VerticalAlignment="Center" Margin="0,0,5,0"/>
             <ComboBox ItemsSource="{Binding AvailablePalettes}"
                       SelectedItem="{Binding SelectedPaletteInfo}"
@@ -32,10 +32,11 @@
             
             <CheckBox Content="Transparent" IsChecked="{Binding IsTransparent}" VerticalAlignment="Center" Margin="5,0"/>
             <CheckBox Content="Edit glyph pixels" IsChecked="{Binding IsPixelEditing}" VerticalAlignment="Center" Margin="5,0"/>
-            <Button Content="Save font" Command="{Binding SaveCommand}" Margin="4,0" Padding="8,3"/>
+            <Button Content="Save font" Command="{Binding SaveCommand}" ToolTip="Build the FONT from the original resource and save changed PNGs under Glyphs\Overrides" Margin="4,0" Padding="8,3"/>
             <Button Content="Reload" Command="{Binding ReloadCommand}" Margin="4,0" Padding="8,3"/>
-            <TextBlock Text="{Binding ValidationError}" Foreground="Firebrick" VerticalAlignment="Center" Margin="5,0"/>
-        </StackPanel>
+            <Button Content="Export all glyphs" Command="{Binding ExportAllGlyphsCommand}" ToolTip="Export non-empty glyphs as grayscale PNGs to Glyphs\Export; copy selected PNGs into Glyphs\Overrides" Margin="4,0" Padding="8,3"/>
+            <TextBlock Text="{Binding ValidationError}" Foreground="Firebrick" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="400" Margin="5,0"/>
+        </WrapPanel>
         
         <!-- Font character grid -->
         <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
@@ -47,14 +48,26 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border BorderBrush="LightGray" BorderThickness="1" Margin="2" Padding="5">
+                        <Border Margin="2" Padding="5">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="BorderBrush" Value="LightGray"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsOverridden}" Value="True">
+                                            <Setter Property="BorderBrush" Value="DarkOrange"/>
+                                            <Setter Property="BorderThickness" Value="2"/>
+                                            <Setter Property="Background" Value="#FFFFF1D6"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
                             <StackPanel Orientation="Vertical">
                                 <!-- Game glyph code -->
                                 <TextBlock Text="{Binding GlyphLabel}"
-                                           HorizontalAlignment="Center"
-                                           FontWeight="Bold"
-                                           FontSize="{Binding DataContext.CharacterFontSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"/>
-                                
+                                            HorizontalAlignment="Center"
+                                            FontWeight="Bold"
+                                            FontSize="{Binding DataContext.CharacterFontSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"/>
                                 <!-- Transliteration -->
                                 <TextBlock Text="{Binding Transliteration}"
                                            HorizontalAlignment="Center"

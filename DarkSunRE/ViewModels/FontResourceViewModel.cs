@@ -433,14 +433,14 @@ namespace DarkSunRE.ViewModels
         {
             return string.IsNullOrWhiteSpace(_project?.ModifiedGamePath)
                 ? string.Empty
-                : Path.Combine(_project.ModifiedGamePath, "Glyphs", "Overrides");
+                : Path.Combine(_project.JsonFolderPath, "..\\Glyphs", "Overrides");
         }
 
         private string GetGlyphExportPath()
         {
             return string.IsNullOrWhiteSpace(_project?.ModifiedGamePath)
                 ? string.Empty
-                : Path.Combine(_project.ModifiedGamePath, "Glyphs", "Export");
+                : Path.Combine(_project.JsonFolderPath, "..\\Glyphs", "Export");
         }
 
         private bool CanExportAllGlyphs()

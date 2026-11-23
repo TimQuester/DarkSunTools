@@ -1,4 +1,4 @@
-﻿using DarkSunRE.Commands;
+using DarkSunRE.Commands;
 using DarkSunRE.Models;
 using DarkSunRE.Services;
 using DSunTools.Common.Gpl;
@@ -48,6 +48,8 @@ namespace DarkSunRE.ViewModels
         public ICommand LoadAllJsonsCommand { get; }
         public ICommand SaveAllTextJsonCommand { get; }
         public ICommand LoadAllTextJsonCommand { get; }
+        public ICommand SaveFileTextJsonCommand { get; }
+        public ICommand LoadFileTextJsonCommand { get; }
         public ICommand ToggleFilterCommand { get; }
         public ICommand SelectAllFiltersCommand { get; }
         public ICommand DeselectAllFiltersCommand { get; }
@@ -71,6 +73,8 @@ namespace DarkSunRE.ViewModels
             LoadAllJsonsCommand = new RelayCommand<ProjectNode>(LoadAllJsons);
             SaveAllTextJsonCommand = new RelayCommand<ProjectNode>(SaveAllTextJson);
             LoadAllTextJsonCommand = new RelayCommand<ProjectNode>(LoadAllTextJson);
+            SaveFileTextJsonCommand = new RelayCommand<ProjectNode>(SaveFileTextJson);
+            LoadFileTextJsonCommand = new RelayCommand<ProjectNode>(LoadFileTextJson);
             ToggleFilterCommand = new RelayCommand<string>(ToggleFilter);
             SelectAllFiltersCommand = new RelayCommand(SelectAllFilters);
             DeselectAllFiltersCommand = new RelayCommand(DeselectAllFilters);
@@ -396,6 +400,176 @@ namespace DarkSunRE.ViewModels
         }
 
         /// <summary>
+        /// Exports the TEXT resources of one GFF file to its own JSON file.
+        /// The original text is stored without the transliteration table;
+        /// the translation is stored in display form (with the table).
+        /// </summary>
+        private void SaveFileTextJson(ProjectNode node)
+        {
+            if (CurrentProject == null || string.IsNullOrWhiteSpace(CurrentProject.JsonFolderPath))
+            {
+                _statusService.ShowError("JSON folder path is not configured.");
+                return;
+            }
+
+            if (node?.Item is not ResourceFile file || file.Data == null)
+            {
+                _statusService.ShowError("Selected file is not loaded.");
+                return;
+            }
+
+            try
+            {
+                DSunTools.Common.Gff.GffFile gff = _resourceService.ParseGffFile(file.Data);
+                var export = new TextResourcesExport
+                {
+                    ProjectName = file.Name,
+                    ExportDate = DateTime.Now
+                };
+                var errors = new List<string>();
+
+                foreach (ResourceInfo resource in file.Resources?.Where(item => item.Type == ResourceType.Text)
+                             ?? Enumerable.Empty<ResourceInfo>())
+                {
+                    try
+                    {
+                        byte[] originalData = _resourceService.GetResourceData(gff, resource.Tag, resource.Number)
+                            ?? throw new InvalidDataException("Resource data is unavailable.");
+                        byte[] currentData = resource.ModifiedData ?? originalData;
+
+                        export.Resources.Add(new TextResourceEntry
+                        {
+                            ContainerName = file.Name,
+                            ResourceId = $"{resource.Tag}-{resource.Number}",
+                            ResourceType = resource.Type.ToString(),
+                            OriginalText = DecodeRawText(originalData),
+                            TranslatedText = DecodeGameText(currentData)
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"{resource.Tag}-{resource.Number}: {ex.Message}");
+                    }
+                }
+
+                Directory.CreateDirectory(CurrentProject.JsonFolderPath);
+                string fileName = $"{Path.GetFileNameWithoutExtension(file.Name)}_texts.json";
+                string fullPath = Path.Combine(CurrentProject.JsonFolderPath, fileName);
+                using var fs = new FileStream(fullPath, FileMode.Create);
+                JsonSerializer.Serialize(fs, export, new JsonSerializerOptions { WriteIndented = true });
+
+                string message = $"Exported {export.Resources.Count} text resource(s) from {file.Name} to {fileName}.";
+                if (errors.Count == 0)
+                    _statusService.ShowSuccess(message);
+                else
+                    _statusService.ShowWarning($"{message} Some resources failed:\n{FormatResourceErrors(errors)}");
+            }
+            catch (Exception ex)
+            {
+                _statusService.ShowError($"Failed to export text resources from {file.Name}: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Imports a per-file text JSON produced by <see cref="SaveFileTextJson"/>.
+        /// </summary>
+        private void LoadFileTextJson(ProjectNode node)
+        {
+            if (CurrentProject == null || string.IsNullOrWhiteSpace(CurrentProject.JsonFolderPath))
+            {
+                _statusService.ShowError("JSON folder path is not configured.");
+                return;
+            }
+
+            if (node?.Item is not ResourceFile file || file.Data == null)
+            {
+                _statusService.ShowError("Selected file is not loaded.");
+                return;
+            }
+
+            string fileName = $"{Path.GetFileNameWithoutExtension(file.Name)}_texts.json";
+            string fullPath = Path.Combine(CurrentProject.JsonFolderPath, fileName);
+            if (!File.Exists(fullPath))
+            {
+                _statusService.ShowError($"Text resource file {fileName} not found.");
+                return;
+            }
+
+            try
+            {
+                using var fs = new FileStream(fullPath, FileMode.Open, FileAccess.Read);
+                TextResourcesExport import = JsonSerializer.Deserialize<TextResourcesExport>(fs);
+                if (import?.Resources == null || import.Resources.Count == 0)
+                {
+                    _statusService.ShowWarning("No text resources found in the JSON file.");
+                    return;
+                }
+
+                int loadedCount = 0;
+                var errors = new List<string>();
+                foreach (TextResourceEntry entry in import.Resources)
+                {
+                    string label = entry?.ResourceId ?? "(missing ID)";
+                    try
+                    {
+                        if (entry == null)
+                            throw new InvalidDataException("Entry is null.");
+                        if (!string.IsNullOrWhiteSpace(entry.ContainerName) &&
+                            !string.Equals(entry.ContainerName, file.Name, StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new InvalidDataException(
+                                $"Entry belongs to {entry.ContainerName}, not {file.Name}.");
+                        }
+
+                        (string tag, int number) = ParseResourceId(entry.ResourceId);
+                        ResourceInfo resource = file.Resources?.FirstOrDefault(item =>
+                            string.Equals(item.Tag, tag, StringComparison.OrdinalIgnoreCase) &&
+                            item.Number == number);
+                        if (resource == null)
+                            throw new KeyNotFoundException($"Resource '{entry.ResourceId}' was not found in {file.Name}.");
+                        if (resource.Type != ResourceType.Text)
+                            throw new InvalidDataException($"Resource '{entry.ResourceId}' is {resource.Type}, not Text.");
+                        if (entry.TranslatedText == null)
+                            throw new InvalidDataException("Entry has no TranslatedText value.");
+
+                        resource.ModifiedData = Encoding.Latin1.GetBytes(EncodeGameText(entry.TranslatedText));
+                        resource.IsModified = true;
+                        file.IsModified = true;
+                        loadedCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"{label}: {ex.Message}");
+                    }
+                }
+
+                string message = $"Loaded {loadedCount} text resource(s) from {fileName}.";
+                if (errors.Count == 0)
+                    _statusService.ShowSuccess(message);
+                else
+                    _statusService.ShowWarning($"{message} Some entries failed:\n{FormatResourceErrors(errors)}");
+            }
+            catch (Exception ex)
+            {
+                _statusService.ShowError($"Failed to import text resources from {fileName}: {ex.Message}", ex);
+            }
+        }
+
+        private static (string Tag, int Number) ParseResourceId(string resourceId)
+        {
+            int separator = resourceId?.LastIndexOf('-') ?? -1;
+            if (separator <= 0 || !int.TryParse(resourceId.Substring(separator + 1), out int number))
+                throw new InvalidDataException($"Invalid resource ID '{resourceId}'. Expected TAG-NUMBER.");
+
+            return (resourceId.Substring(0, separator), number);
+        }
+
+        private static string DecodeRawText(byte[] data)
+        {
+            return Encoding.Latin1.GetString(data ?? Array.Empty<byte>()).TrimEnd('\0');
+        }
+
+        /// <summary>
         /// Exports all text resources (TEXT, MSG, MERR, ETME, SPIN, RNME, NAME) to a single JSON file.
         /// </summary>
         private void SaveAllTextJson(ProjectNode node)
@@ -452,7 +626,9 @@ namespace DarkSunRE.ViewModels
 
                             if (resource.Type == ResourceType.Text)
                             {
-                                entry.OriginalText = DecodeGameText(originalData);
+                                // Source text stays raw; the translation is
+                                // displayed through the transliteration table.
+                                entry.OriginalText = DecodeRawText(originalData);
                                 entry.TranslatedText = DecodeGameText(currentData);
                             }
                             else

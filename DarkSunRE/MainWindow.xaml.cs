@@ -223,6 +223,11 @@ namespace DarkSunRE
                     documentViewModel = new GplDocumentViewModel(document);
                 }
 
+                // Keep document titles consistent for every resource type:
+                // file name, then the resource tag/number.
+                documentViewModel.Title = $"{container.Name}:{resource.Tag}-{resource.Number}";
+                documentViewModel.File = container.FullPath;
+
                 // Создаем представление в зависимости от типа вьюмодели
                 UserControl view = null;
                 if (documentViewModel is GplDocumentViewModel gplViewModel)

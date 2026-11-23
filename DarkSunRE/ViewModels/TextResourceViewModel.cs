@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -26,6 +26,12 @@ namespace DarkSunRE.ViewModels
         }
 
         public string OriginalText { get; private set; } = string.Empty;
+
+        /// <summary>
+        /// Original game text exactly as stored, without applying the
+        /// transliteration table. This is the read-only source field.
+        /// </summary>
+        public string OriginalGameText { get; private set; } = string.Empty;
 
         public string Text
         {
@@ -74,10 +80,12 @@ namespace DarkSunRE.ViewModels
 
             Title = $"{resourceInfo.Tag}-{resourceInfo.Number}";
             File = resourceInfo.Tag;
+            OriginalGameText = DecodeRaw(_originalBytes);
             OriginalText = DecodeForDisplay(_originalBytes);
             _text = OriginalText;
             IsModified = false;
             ValidationError = string.Empty;
+            OnPropertyChanged(nameof(OriginalGameText));
             OnPropertyChanged(nameof(OriginalText));
             OnPropertyChanged(nameof(Text));
             OnPropertyChanged(nameof(CanSave));
@@ -107,17 +115,24 @@ namespace DarkSunRE.ViewModels
             if (_resourceInfo == null)
                 return;
 
+            OriginalGameText = DecodeRaw(_originalBytes);
             _text = OriginalText = DecodeForDisplay(_originalBytes);
             IsModified = false;
             ValidationError = string.Empty;
+            OnPropertyChanged(nameof(OriginalGameText));
             OnPropertyChanged(nameof(Text));
             OnPropertyChanged(nameof(OriginalText));
             OnPropertyChanged(nameof(CanSave));
         }
 
+        private static string DecodeRaw(byte[] bytes)
+        {
+            return Encoding.Latin1.GetString(bytes ?? Array.Empty<byte>()).TrimEnd('\0');
+        }
+
         private string DecodeForDisplay(byte[] bytes)
         {
-            string gameText = Encoding.Latin1.GetString(bytes);
+            string gameText = DecodeRaw(bytes);
             return GplTransliteration.DecodeToDisplay(gameText, _transliterationRules);
         }
 

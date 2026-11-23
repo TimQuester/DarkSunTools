@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (for example v1.0.0). Created at the selected commit if it does not exist."
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || github.event.inputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Resolve version
+        shell: pwsh
+        run: |
+          $tag = "$env:RELEASE_TAG".Trim()
+          if (-not $tag) { throw "A release tag is required." }
+          $version = $tag -replace '^v', ''
+          if ($version -notmatch '^\d+\.\d+\.\d+') {
+            throw "Release tag '$tag' must look like v1.2.3 or v1.2.3-beta."
+          }
+          "VERSION=$version" >> $env:GITHUB_ENV
+          "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
+
+      - name: Restore
+        run: dotnet restore DSunTools.sln
+        env:
+          DOTNET_NOLOGO: true
+          DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+      - name: Build
+        run: dotnet build DSunTools.sln --configuration Release --no-restore
+        env:
+          DOTNET_NOLOGO: true
+          DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+      - name: Test
+        run: >
+          dotnet test ToolsTests/ToolsTests.csproj
+          --configuration Release
+          --no-build
+          --no-restore
+          --verbosity normal
+          --results-directory TestResults
+          --logger "trx;LogFileName=test-results.trx"
+        env:
+          DOTNET_NOLOGO: true
+          DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+      - name: Publish
+        shell: pwsh
+        run: >
+          dotnet publish DarkSunRE/DarkSunRE.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          -p:Version=$env:VERSION
+          -p:DebugType=None
+          -p:DebugSymbols=false
+          --output publish
+        env:
+          DOTNET_NOLOGO: true
+          DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+      - name: Package release
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          $zip = "release/DarkSunRE-$env:VERSION-win-x64.zip"
+          Compress-Archive -Path publish/* -DestinationPath $zip -Force
+          "ZIP_PATH=$zip" >> $env:GITHUB_ENV
+
+      - name: Upload release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-package
+          path: release/*.zip
+          if-no-files-found: error
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-test-results
+          path: TestResults/test-results.trx
+          if-no-files-found: warn
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: DarkSunRE ${{ env.VERSION }}
+          files: ${{ env.ZIP_PATH }}
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}

@@ -35,7 +35,11 @@
             <Button Content="-" Command="{Binding ZoomOutCommand}" Width="25" Height="25" Margin="5,0"/>
             <TextBlock Text="{Binding ScalePercentage, StringFormat='{}{0}%'}" VerticalAlignment="Center" Margin="0,0,5,0"/>
             <Button Content="+" Command="{Binding ZoomInCommand}" Width="25" Height="25" Margin="0,0,5,0"/>
-            <Button Content="100%" Command="{Binding ResetZoomCommand}" Width="40" Height="25"/>
+            <Button Content="100%" Command="{Binding ResetZoomCommand}" Width="40" Height="25" Margin="0,0,10,0"/>
+
+            <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="5,0"/>
+            <Button Content="Export PNG" Command="{Binding ExportPngCommand}" Height="25" Margin="0,0,5,0"/>
+            <Button Content="Import PNG" Command="{Binding ImportPngCommand}" Height="25"/>
         </StackPanel>
 
         <Border Grid.Row="1" Background="Black" ClipToBounds="True">

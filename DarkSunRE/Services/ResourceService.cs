@@ -427,7 +427,7 @@ namespace DarkSunRE.Services
         {
             // The project and resource are supplied by MainWindow once the
             // view model is created, same as for images and fonts.
-            return new AnimationResourceViewModel();
+            return new AnimationResourceViewModel(_statusService);
         }
 
         private DocumentViewModel CreatePaletteViewModel(ResourceInfo resourceInfo, byte[] data)

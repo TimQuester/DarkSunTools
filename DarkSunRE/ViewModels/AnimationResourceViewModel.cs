@@ -1,15 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using DarkSunRE.Commands;
 using DarkSunRE.Models;
+using DarkSunRE.Services;
 using DSunTools.Common.Gff;
 using DSunTools.Common.Image;
+using Microsoft.Win32;
 
 namespace DarkSunRE.ViewModels
 {
@@ -24,6 +28,7 @@ namespace DarkSunRE.ViewModels
         private byte[] _animationData;
         private Project _project;
         private ResourceInfo _resourceInfo;
+        private readonly IStatusService _statusService;
 
         private ImageSource _imageSource;
         private PaletteInfo _selectedPalette;
@@ -39,9 +44,12 @@ namespace DarkSunRE.ViewModels
         private readonly ICommand _zoomInCommand;
         private readonly ICommand _zoomOutCommand;
         private readonly ICommand _resetZoomCommand;
+        private readonly ICommand _exportPngCommand;
+        private readonly ICommand _importPngCommand;
 
-        public AnimationResourceViewModel()
+        public AnimationResourceViewModel(IStatusService statusService = null)
         {
+            _statusService = statusService;
             Title = "Animation";
             ToolTip = "BMA animation";
             CanClose = true;
@@ -53,6 +61,8 @@ namespace DarkSunRE.ViewModels
             _zoomInCommand = new RelayCommand(ZoomIn);
             _zoomOutCommand = new RelayCommand(ZoomOut);
             _resetZoomCommand = new RelayCommand(ResetZoom);
+            _exportPngCommand = new RelayCommand(ExportPngFrames);
+            _importPngCommand = new RelayCommand(ImportPngFrames);
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(83) };
             _timer.Tick += (_, __) =>
@@ -155,6 +165,8 @@ namespace DarkSunRE.ViewModels
         public ICommand ZoomInCommand => _zoomInCommand;
         public ICommand ZoomOutCommand => _zoomOutCommand;
         public ICommand ResetZoomCommand => _resetZoomCommand;
+        public ICommand ExportPngCommand => _exportPngCommand;
+        public ICommand ImportPngCommand => _importPngCommand;
 
         public void Initialize(Project project, ResourceInfo resourceInfo, byte[] animationData)
         {
@@ -417,6 +429,164 @@ namespace DarkSunRE.ViewModels
                 ImageSource = null;
                 System.Diagnostics.Debug.WriteLine($"Failed to render BMA frame: {ex.Message}");
             }
+        }
+
+        private void ExportPngFrames()
+        {
+            if (_animation == null || _animation.Frames.Count == 0)
+            {
+                _statusService?.ShowError("There are no animation frames to export.");
+                return;
+            }
+
+            var dialog = new OpenFolderDialog { Title = "Select folder for animation PNG frames" };
+            if (dialog.ShowDialog() != true)
+                return;
+
+            try
+            {
+                string baseName = GetFrameBaseName();
+                for (int i = 0; i < _animation.Frames.Count; i++)
+                {
+                    ImageFrame frame = _animation.Frames[i];
+                    string path = Path.Combine(dialog.FolderName, $"{baseName}_{i:D3}.png");
+                    AnimationPngCodec.ExportFrame(
+                        path,
+                        frame.GetPixels(),
+                        frame.Width,
+                        frame.Height,
+                        GetPaletteForFrame(i));
+                }
+
+                _statusService?.ShowSuccess(
+                    $"Exported {_animation.Frames.Count} PNG frames to {dialog.FolderName}");
+            }
+            catch (Exception ex)
+            {
+                _statusService?.ShowError($"Failed to export animation frames: {ex.Message}", ex);
+            }
+        }
+
+        private void ImportPngFrames()
+        {
+            var dialog = new OpenFolderDialog { Title = "Select folder with animation PNG frames" };
+            if (dialog.ShowDialog() != true)
+                return;
+
+            try
+            {
+                var entries = Directory.GetFiles(dialog.FolderName, "*.png")
+                    .Select(path => new { Path = path, Number = ParseFrameNumber(path) })
+                    .Where(entry => entry.Number.HasValue)
+                    .OrderBy(entry => entry.Number.Value)
+                    .ToList();
+
+                if (entries.Count == 0)
+                    throw new InvalidDataException(
+                        "No PNG frames with a numeric suffix were found (expected name_000.png).");
+
+                if (entries.GroupBy(entry => entry.Number.Value).Any(group => group.Count() > 1))
+                    throw new InvalidDataException("The PNG folder contains duplicate frame numbers.");
+
+                var imported = new List<AnimationPngCodec.ImportedFrame>();
+                foreach (var entry in entries)
+                    imported.Add(AnimationPngCodec.ImportFrame(entry.Path));
+
+                AnimationPngCodec.ImportedFrame first = imported[0];
+                int width = first.Width;
+                int height = first.Height;
+
+                if (_animation != null &&
+                    (width != _animation.Width || height != _animation.Height))
+                {
+                    throw new InvalidDataException(
+                        $"PNG dimensions are {width}x{height}, but this animation is " +
+                        $"{_animation.Width}x{_animation.Height}.");
+                }
+
+                if (imported.Any(frame => frame.Width != width || frame.Height != height))
+                    throw new InvalidDataException("All PNG frames must have the same dimensions.");
+
+                if (imported.Any(frame => !PalettesEqual(frame.Palette, first.Palette)))
+                {
+                    _statusService?.ShowWarning(
+                        "PNG frames use different palettes. BMA stores only palette indices; " +
+                        "the game palette comes from the animation script/PAL chunks.");
+                }
+
+                int originalFrameCount = _animation?.Frames.Count ?? 0;
+                var framePixels = imported.Select(frame => frame.Pixels).ToList();
+                byte[] bma = BmaWriter.Write(framePixels, width, height);
+
+                _animationData = bma;
+                if (_resourceInfo != null)
+                {
+                    _resourceInfo.ModifiedData = bma;
+                    _resourceInfo.IsModified = true;
+                }
+
+                LoadAnimation();
+                IsModified = true;
+
+                string countNote = originalFrameCount > 0 && originalFrameCount != imported.Count
+                    ? " Frame count differs from the original; check the ACF timing."
+                    : string.Empty;
+                _statusService?.ShowSuccess(
+                    $"Imported {imported.Count} PNG frames. Use Generate new file to write them into the GFF." +
+                    " The PNG palette is not stored in BMA; the ACF/PAL palette is used in-game." +
+                    countNote);
+            }
+            catch (Exception ex)
+            {
+                _statusService?.ShowError($"Failed to import animation frames: {ex.Message}", ex);
+            }
+        }
+
+        private Palette GetPaletteForFrame(int frameIndex)
+        {
+            Palette palette = _selectedPalette?.Palette;
+            if (_selectedPalette?.FramePalettes != null && _selectedPalette.FramePalettes.Count > 0)
+            {
+                int index = Math.Min(frameIndex, _selectedPalette.FramePalettes.Count - 1);
+                palette = _selectedPalette.FramePalettes[index];
+            }
+
+            return palette;
+        }
+
+        private string GetFrameBaseName()
+        {
+            string raw = _resourceInfo == null
+                ? "animation"
+                : $"{_resourceInfo.Tag.Trim()}-{_resourceInfo.Number}";
+            foreach (char invalid in Path.GetInvalidFileNameChars())
+                raw = raw.Replace(invalid, '_');
+            return string.IsNullOrWhiteSpace(raw) ? "animation" : raw;
+        }
+
+        private static int? ParseFrameNumber(string path)
+        {
+            string name = Path.GetFileNameWithoutExtension(path);
+            Match match = Regex.Match(name, @"_(\d+)$");
+            return match.Success && int.TryParse(match.Groups[1].Value, out int value)
+                ? value
+                : null;
+        }
+
+        private static bool PalettesEqual(
+            IReadOnlyList<System.Windows.Media.Color> left,
+            IReadOnlyList<System.Windows.Media.Color> right)
+        {
+            if (left == null || right == null || left.Count != right.Count)
+                return false;
+
+            for (int i = 0; i < left.Count; i++)
+            {
+                if (left[i] != right[i])
+                    return false;
+            }
+
+            return true;
         }
 
         private void TogglePlayback()

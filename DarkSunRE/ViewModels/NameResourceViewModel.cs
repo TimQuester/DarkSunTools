@@ -91,7 +91,15 @@ namespace DarkSunRE.ViewModels
                 .Select(rule => new DSunTools.Common.Gpl.GplTransliterationRule(rule.From ?? string.Empty, rule.To ?? string.Empty))
                 .ToList() ?? new List<DSunTools.Common.Gpl.GplTransliterationRule>();
             foreach (NameEntry entry in Entries)
-                entry.MainName = DSunTools.Common.Gpl.GplTransliteration.DecodeToDisplay(entry.MainName, _transliterationRules);
+            {
+                if (string.IsNullOrEmpty(entry.OriginalMainName))
+                    entry.OriginalMainName = entry.MainName;
+                if (string.IsNullOrEmpty(entry.OriginalPath))
+                    entry.OriginalPath = entry.Path;
+
+                entry.MainName = DSunTools.Common.Gpl.GplTransliteration.DecodeToDisplay(
+                    entry.OriginalMainName, _transliterationRules);
+            }
 
             File = fileName;
             IsModified = false;
@@ -163,7 +171,11 @@ namespace DarkSunRE.ViewModels
             {
                 Entries = new ObservableCollection<NameEntry>(_nameResource.Entries);
                 foreach (NameEntry entry in Entries)
-                    entry.MainName = DSunTools.Common.Gpl.GplTransliteration.DecodeToDisplay(entry.MainName, _transliterationRules);
+                {
+                    entry.MainName = DSunTools.Common.Gpl.GplTransliteration.DecodeToDisplay(
+                        entry.OriginalMainName, _transliterationRules);
+                    entry.Path = entry.OriginalPath;
+                }
             }
 
             ValidationError = string.Empty;

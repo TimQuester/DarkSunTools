@@ -428,23 +428,35 @@ namespace DarkSunRE.ViewModels
                 };
                 var errors = new List<string>();
 
-                foreach (ResourceInfo resource in file.Resources?.Where(item => item.Type == ResourceType.Text)
-                             ?? Enumerable.Empty<ResourceInfo>())
+                foreach (ResourceInfo resource in file.Resources?.Where(item =>
+                             item.Type == ResourceType.Text || item.Type == ResourceType.Name)
+                         ?? Enumerable.Empty<ResourceInfo>())
                 {
                     try
                     {
                         byte[] originalData = _resourceService.GetResourceData(gff, resource.Tag, resource.Number)
                             ?? throw new InvalidDataException("Resource data is unavailable.");
                         byte[] currentData = resource.ModifiedData ?? originalData;
-
-                        export.Resources.Add(new TextResourceEntry
+                        var entry = new TextResourceEntry
                         {
                             ContainerName = file.Name,
                             ResourceId = $"{resource.Tag}-{resource.Number}",
-                            ResourceType = resource.Type.ToString(),
-                            OriginalText = DecodeRawText(originalData),
-                            TranslatedText = DecodeGameText(currentData)
-                        });
+                            ResourceType = resource.Type.ToString()
+                        };
+
+                        if (resource.Type == ResourceType.Text)
+                        {
+                            entry.OriginalText = DecodeRawText(originalData);
+                            entry.TranslatedText = DecodeGameText(currentData);
+                        }
+                        else
+                        {
+                            entry.NameEntries = ExportNameEntries(
+                                ReadNameResource(originalData),
+                                ReadNameResource(currentData));
+                        }
+
+                        export.Resources.Add(entry);
                     }
                     catch (Exception ex)
                     {
@@ -527,12 +539,11 @@ namespace DarkSunRE.ViewModels
                             item.Number == number);
                         if (resource == null)
                             throw new KeyNotFoundException($"Resource '{entry.ResourceId}' was not found in {file.Name}.");
-                        if (resource.Type != ResourceType.Text)
-                            throw new InvalidDataException($"Resource '{entry.ResourceId}' is {resource.Type}, not Text.");
-                        if (entry.TranslatedText == null)
-                            throw new InvalidDataException("Entry has no TranslatedText value.");
+                        if (resource.Type != ResourceType.Text && resource.Type != ResourceType.Name)
+                            throw new InvalidDataException(
+                                $"Resource '{entry.ResourceId}' is {resource.Type}, not Text or Name.");
 
-                        resource.ModifiedData = Encoding.Latin1.GetBytes(EncodeGameText(entry.TranslatedText));
+                        resource.ModifiedData = EncodeResourceText(resource, entry);
                         resource.IsModified = true;
                         file.IsModified = true;
                         loadedCount++;
@@ -757,7 +768,9 @@ namespace DarkSunRE.ViewModels
             for (int i = 0; i < current.Entries.Count; i++)
             {
                 NameEntry currentEntry = current.Entries[i];
-                string originalName = i < original.Entries.Count ? DecodeGameText(original.Entries[i].MainName) : string.Empty;
+                string originalName = i < original.Entries.Count
+                    ? original.Entries[i].OriginalMainName ?? original.Entries[i].MainName ?? string.Empty
+                    : string.Empty;
                 result.Add(new NameResourceEntryExport
                 {
                     OriginalMainName = originalName,

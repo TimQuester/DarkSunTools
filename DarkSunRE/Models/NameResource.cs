@@ -19,77 +19,53 @@ namespace DarkSunRE.Models
         /// Загружает данные NAME ресурса из байтового массива
         /// </summary>
         /// <param name="data">Байтовый массив данных NAME ресурса</param>
+        private const int RecordSize = 25;
+        private const int StringAreaSize = 22;
+
         public void LoadFromBytes(byte[] data)
         {
             Entries.Clear();
-            
-            int offset = 0;
-            while (offset < data.Length - 3)
+            if (data == null)
+                return;
+
+            // DS1 NAME records are fixed 25-byte slots: two NUL-terminated
+            // strings in bytes 0..21, u16 index at 22, flag at 24. A bare
+            // C-string walk misparses the pool because the path fragments
+            // are not aligned to record boundaries.
+            for (int offset = 0; offset + RecordSize <= data.Length; offset += RecordSize)
             {
-                // Читаем первую строку (основное имя)
-                string mainName = ReadNullTerminatedString(data, ref offset);
-                if (string.IsNullOrEmpty(mainName) && offset >= data.Length - 3)
-                    break;
-                    
-                // Читаем вторую строку (путь/идентификатор)
-                string path = ReadNullTerminatedString(data, ref offset);
-                
-                // Читаем 2 байта индекса/смещения
-                if (offset + 1 < data.Length)
+                string mainName = ReadString(data, offset, StringAreaSize);
+                int pathStart = offset + mainName.Length + 1;
+                string path = pathStart < offset + StringAreaSize
+                    ? ReadString(data, pathStart, offset + StringAreaSize - pathStart)
+                    : string.Empty;
+
+                int indexOffset = offset + 22;
+                ushort index = BitConverter.ToUInt16(data, indexOffset);
+                byte flag = data[offset + 24];
+
+                Entries.Add(new NameEntry
                 {
-                    ushort index = BitConverter.ToUInt16(data, offset);
-                    offset += 2;
-                    
-                    // Читаем 1 байт флага
-                    if (offset < data.Length)
-                    {
-                        byte flag = data[offset];
-                        offset++;
-                        
-                        Entries.Add(new NameEntry
-                        {
-                            MainName = mainName,
-                            Path = path,
-                            Index = index,
-                            Flag = flag
-                        });
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-                else
-                {
-                    break;
-                }
+                    MainName = mainName,
+                    OriginalMainName = mainName,
+                    Path = path,
+                    OriginalPath = path,
+                    Index = index,
+                    Flag = flag
+                });
             }
         }
 
         /// <summary>
-        /// Читает строку до нулевого терминатора
+        /// Reads a NUL-terminated string from a bounded string area.
         /// </summary>
-        private string ReadNullTerminatedString(byte[] data, ref int offset)
+        private static string ReadString(byte[] data, int start, int maximumLength)
         {
-            int start = offset;
-            while (offset < data.Length && data[offset] != 0)
-            {
-                offset++;
-            }
-            
-            string result = string.Empty;
-            if (offset > start)
-            {
-                result = Encoding.Latin1.GetString(data, start, offset - start);
-            }
-            
-            // Пропускаем нулевой байт
-            if (offset < data.Length && data[offset] == 0)
-            {
-                offset++;
-            }
-            
-            return result;
+            int length = 0;
+            while (length < maximumLength && data[start + length] != 0)
+                length++;
+
+            return length == 0 ? string.Empty : Encoding.Latin1.GetString(data, start, length);
         }
 
         /// <summary>
@@ -102,20 +78,24 @@ namespace DarkSunRE.Models
             {
                 foreach (var entry in Entries)
                 {
-                    // Записываем основное имя
                     byte[] mainNameBytes = EncodeName(entry.MainName, rules);
-                    ms.Write(mainNameBytes, 0, mainNameBytes.Length);
-                    ms.WriteByte(0); // нулевой терминатор
-                    
-                    // Записываем путь
                     byte[] pathBytes = EncodeName(entry.Path, rules);
+                    int stringBytes = mainNameBytes.Length + 1 + pathBytes.Length + 1;
+                    if (stringBytes > StringAreaSize)
+                    {
+                        throw new InvalidOperationException(
+                            $"NAME entry '{entry.MainName}' needs {stringBytes} bytes in the 22-byte string area.");
+                    }
+
+                    ms.Write(mainNameBytes, 0, mainNameBytes.Length);
+                    ms.WriteByte(0);
                     ms.Write(pathBytes, 0, pathBytes.Length);
-                    ms.WriteByte(0); // нулевой терминатор
-                    
-                    // Записываем индекс
+                    ms.WriteByte(0);
+
+                    for (int i = stringBytes; i < StringAreaSize; i++)
+                        ms.WriteByte(0);
+
                     ms.Write(BitConverter.GetBytes(entry.Index), 0, 2);
-                    
-                    // Записываем флаг
                     ms.WriteByte(entry.Flag);
                 }
                 return ms.ToArray();

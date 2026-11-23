@@ -20,7 +20,13 @@
             CellEditEnding="DataGrid_CellEditEnding"
             Margin="5">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Main Name" Binding="{Binding MainName, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                <DataGridTextColumn Header="Original (game)"
+                                    Binding="{Binding OriginalMainName, Mode=OneWay}"
+                                    IsReadOnly="True"
+                                    Width="*"/>
+                <DataGridTextColumn Header="Translation"
+                                    Binding="{Binding MainName, UpdateSourceTrigger=PropertyChanged}"
+                                    Width="*"/>
                 <DataGridTextColumn Header="Path" Binding="{Binding Path, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
                 <DataGridTextColumn Header="Index" Binding="{Binding Index}" Width="100"/>
                 <DataGridTextColumn Header="Flag" Binding="{Binding Flag}" Width="100"/>

@@ -12,14 +12,23 @@ namespace DarkSunRE.Models
     public class NameEntry
     {
         /// <summary>
-        /// Основное имя (например, "Staff Sling")
+        /// Основное имя в отображаемом виде (перевод, с таблицей
+        /// транслитерации).
         /// </summary>
         public string MainName { get; set; }
-        
+
+        /// <summary>
+        /// Исходное основное имя из игры, без применения таблицы.
+        /// </summary>
+        public string OriginalMainName { get; set; }
+
         /// <summary>
         /// Путь или идентификатор (например, "te\NAMEIX\*.oda" или "EIX\*.oda")
         /// </summary>
         public string Path { get; set; }
+
+        /// <summary>Исходный путь из игры (для Reload).</summary>
+        public string OriginalPath { get; set; }
         
         /// <summary>
         /// Индекс или смещение
@@ -34,7 +43,9 @@ namespace DarkSunRE.Models
         public NameEntry()
         {
             MainName = string.Empty;
+            OriginalMainName = string.Empty;
             Path = string.Empty;
+            OriginalPath = string.Empty;
         }
         
         public override string ToString()

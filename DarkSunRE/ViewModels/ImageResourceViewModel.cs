@@ -391,6 +391,13 @@ namespace DarkSunRE.ViewModels
     public class PaletteInfo
     {
         public Palette Palette { get; set; }
+
+        /// <summary>
+        /// Per-frame palettes for ACF-driven animations; null for a normal
+        /// static PAL entry.
+        /// </summary>
+        public IReadOnlyList<Palette> FramePalettes { get; set; }
+
         public string Name { get; set; }
         public string Tag { get; set; }
         public int Number { get; set; }

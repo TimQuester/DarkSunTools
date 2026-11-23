@@ -278,61 +278,65 @@ namespace DarkSunRE.ViewModels
                     return;
 
                 int bmaId = _resourceInfo.Number;
-                AcfPaletteInfo exact = null;
-                var exactResource = acfResources.FirstOrDefault(r => r.Number == bmaId);
-                if (exactResource != null)
-                    exact = AcfPaletteReader.Read(gff.GetResourceData(exactResource.Tag, exactResource.Number));
+                byte[] activePalette = null;
+                AcfPaletteTimeline targetTimeline = null;
 
-                if (exact?.BuiltPalette != null)
-                {
-                    AvailablePalettes.Add(new PaletteInfo
-                    {
-                        Palette = exact.BuiltPalette,
-                        Name = $"ACF {bmaId}",
-                        Tag = "ACF ",
-                        Number = bmaId
-                    });
-                    return;
-                }
-
-                // Some scripts have no palette ops of their own; the intro
-                // plays them in sequence and the last committed palette
-                // carries over.
-                foreach (var acfResource in acfResources.Where(r => r.Number < bmaId).OrderByDescending(r => r.Number))
-                {
-                    AcfPaletteInfo previous = AcfPaletteReader.Read(
-                        gff.GetResourceData(acfResource.Tag, acfResource.Number));
-                    if (previous.BuiltPalette == null)
-                        continue;
-
-                    AvailablePalettes.Add(new PaletteInfo
-                    {
-                        Palette = previous.BuiltPalette,
-                        Name = $"ACF {acfResource.Number} (inherited)",
-                        Tag = "ACF ",
-                        Number = acfResource.Number
-                    });
-                    return;
-                }
-
-                if (exact?.PaletteChunkId is int paletteId)
+                Func<int, Palette> resolvePalette = paletteId =>
                 {
                     ResourceInfo paletteResource = container.Resources
                         .FirstOrDefault(r => r.Tag == "PAL " && r.Number == paletteId);
-                    if (paletteResource != null)
+                    if (paletteResource == null)
+                        return null;
+
+                    byte[] paletteData = gff.GetResourceData(paletteResource.Tag, paletteResource.Number);
+                    return paletteData != null && paletteData.Length == 768
+                        ? Palette.FromPalData(paletteData)
+                        : null;
+                };
+
+                // Play the palette side of the intro in sequence. Most
+                // cinematics inherit the palette left by the previous one;
+                // BMA 10 in particular changes it on almost every frame.
+                foreach (var acfResource in acfResources.Where(r => r.Number <= bmaId))
+                {
+                    AcfPaletteTimeline timeline = AcfPaletteTimelineReader.Read(
+                        gff.GetResourceData(acfResource.Tag, acfResource.Number),
+                        activePalette,
+                        resolvePalette);
+
+                    if (timeline.FinalPaletteData != null)
+                        activePalette = timeline.FinalPaletteData;
+
+                    if (acfResource.Number == bmaId)
+                        targetTimeline = timeline;
+                }
+
+                if (targetTimeline == null)
+                    return;
+
+                if (targetTimeline.FramePalettes.Count > 0)
+                {
+                    AvailablePalettes.Add(new PaletteInfo
                     {
-                        byte[] paletteData = gff.GetResourceData(paletteResource.Tag, paletteResource.Number);
-                        if (paletteData != null && paletteData.Length == 768)
-                        {
-                            AvailablePalettes.Add(new PaletteInfo
-                            {
-                                Palette = Palette.FromPalData(paletteData),
-                                Name = $"PAL {paletteId} (from ACF {bmaId})",
-                                Tag = "PAL ",
-                                Number = paletteId
-                            });
-                        }
-                    }
+                        Palette = targetTimeline.FramePalettes[0],
+                        FramePalettes = targetTimeline.FramePalettes,
+                        Name = $"ACF {bmaId} (per-frame)",
+                        Tag = "ACF ",
+                        Number = bmaId
+                    });
+                }
+                else if (targetTimeline.FinalPalette != null)
+                {
+                    string suffix = targetTimeline.PaletteChunkId is int paletteId
+                        ? $"(PAL {paletteId})"
+                        : "(inherited)";
+                    AvailablePalettes.Add(new PaletteInfo
+                    {
+                        Palette = targetTimeline.FinalPalette,
+                        Name = $"ACF {bmaId} {suffix}",
+                        Tag = "ACF ",
+                        Number = bmaId
+                    });
                 }
             }
             catch (Exception ex)
@@ -353,6 +357,13 @@ namespace DarkSunRE.ViewModels
                 int width = frame.Width;
                 int height = frame.Height;
 
+                Palette activePalette = _selectedPalette?.Palette;
+                if (_selectedPalette?.FramePalettes != null && _selectedPalette.FramePalettes.Count > 0)
+                {
+                    int paletteIndex = Math.Min(CurrentFrameIndex, _selectedPalette.FramePalettes.Count - 1);
+                    activePalette = _selectedPalette.FramePalettes[paletteIndex];
+                }
+
                 int scaledWidth = Math.Max(1, (int)Math.Round(width * _scale));
                 int scaledHeight = Math.Max(1, (int)Math.Round(height * _scale));
                 var pixelData = new byte[scaledWidth * scaledHeight * 4];
@@ -369,9 +380,9 @@ namespace DarkSunRE.ViewModels
 
                         byte paletteIndex = pixels[originalY * width + originalX];
                         byte red, green, blue;
-                        if (_selectedPalette?.Palette != null)
+                        if (activePalette != null)
                         {
-                            var color = _selectedPalette.Palette.GetColor(paletteIndex);
+                            var color = activePalette.GetColor(paletteIndex);
                             red = (byte)color.Red;
                             green = (byte)color.Green;
                             blue = (byte)color.Blue;

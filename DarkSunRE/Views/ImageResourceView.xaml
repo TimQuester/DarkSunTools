@@ -4,8 +4,12 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:DarkSunRE.Views"
+             xmlns:converters="clr-namespace:DarkSunRE.Converters"
              mc:Ignorable="d" 
              d:DesignHeight="450" d:DesignWidth="800">
+    <UserControl.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+    </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -14,6 +18,20 @@
         
         <!-- Панель с элементами управления -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="5">
+            <StackPanel Orientation="Horizontal"
+                        Visibility="{Binding HasMultipleFrames, Converter={StaticResource BoolToVisibility}}">
+                <Button Content="{Binding PlayPauseText}" Command="{Binding PlayPauseCommand}" Width="60" Height="25" Margin="0,0,5,0"/>
+                <Button Content="◀" Command="{Binding PreviousFrameCommand}" Width="28" Height="25" Margin="0,0,2,0"/>
+                <Button Content="▶" Command="{Binding NextFrameCommand}" Width="28" Height="25" Margin="0,0,5,0"/>
+                <Slider Width="160" Minimum="0"
+                        Maximum="{Binding LastFrameIndex}"
+                        Value="{Binding CurrentFrameIndex, Mode=TwoWay}"
+                        IsSnapToTickEnabled="True" TickFrequency="1"
+                        VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding FrameLabel}" VerticalAlignment="Center" Margin="8,0,10,0" MinWidth="55"/>
+                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="0,0,5,0"/>
+            </StackPanel>
+
             <TextBlock Text="Palette:" VerticalAlignment="Center" Margin="0,0,5,0"/>
             <ComboBox x:Name="PaletteComboBox" 
                       ItemsSource="{Binding AvailablePalettes}"

@@ -1,4 +1,4 @@
-﻿using DarkSunRE.Models;
+using DarkSunRE.Models;
 using DarkSunRE.ViewModels;
 using DarkSunRE.Views;
 using Microsoft.Win32;
@@ -139,6 +139,33 @@ namespace DarkSunRE
                     textViewModel.Initialize(resource, resourceBytes, project.TransliterationRules);
                     documentViewModel = textViewModel;
                 }
+                else if (resource.Type == ResourceType.Animation)
+                {
+                    // BMA: cinematic image stream. ACF scripts are deliberately
+                    // not interpreted; only the frames are shown.
+                    byte[] resourceBytes = resource.ModifiedData;
+
+                    if (resourceBytes == null && !string.IsNullOrWhiteSpace(project.ModifiedGamePath))
+                    {
+                        var modifiedPath = Path.Combine(project.ModifiedGamePath, container.Name);
+                        if (File.Exists(modifiedPath))
+                        {
+                            var gffBytes = File.ReadAllBytes(modifiedPath);
+                            var gff = _resourceService.ParseGffFile(gffBytes);
+                            resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
+                        }
+                    }
+
+                    if (resourceBytes == null)
+                    {
+                        var gff = _resourceService.ParseGffFile(container.Data);
+                        resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
+                    }
+
+                    var animationViewModel = (AnimationResourceViewModel)_resourceService.CreateEditorViewModel(resource, resourceBytes);
+                    animationViewModel.Initialize(project, resource, resourceBytes);
+                    documentViewModel = animationViewModel;
+                }
                 else if (resource.Type == ResourceType.Name)
                 {
                     // Для NAME ресурсов создаем NameResourceViewModel
@@ -173,6 +200,13 @@ namespace DarkSunRE
                             project.TransliterationRules);
                     }
                 }
+                else if (resource.Type == ResourceType.AnimationControl)
+                {
+                    // ACF drives the cinematic player; this tool only decodes
+                    // the image stream (BMA) and intentionally ignores scripts.
+                    MessageBox.Show("Animation control scripts (ACF) are not interpreted. Open the matching BMA resource to view the frames.");
+                    return;
+                }
                 else
                 {
                     string resourceName = $"{resource.Tag}-{resource.Number}";
@@ -198,6 +232,10 @@ namespace DarkSunRE
                 else if (documentViewModel is ImageResourceViewModel imageViewModel)
                 {
                     view = new ImageResourceView { DataContext = imageViewModel };
+                }
+                else if (documentViewModel is AnimationResourceViewModel animationViewModel)
+                {
+                    view = new AnimationResourceView { DataContext = animationViewModel };
                 }
                 else if (documentViewModel is FontResourceViewModel fontViewModel)
                 {

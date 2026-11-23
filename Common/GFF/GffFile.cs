@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -93,18 +93,23 @@ namespace DSunTools.Common.Gff
                 }
             }
 
-            // Validate presence of GFFI index table
-            if (!tablesByTag.TryGetValue("GFFI", out var gffiTable))
+            // GFFI is only needed to resolve secondary (segmented) tables.
+            // CINE.GFF has no GFFI type at all: all of its chunks are primary.
+            if (secondaryTableDescriptorForTag.Count > 0)
             {
-                throw new InvalidDataException("Invalid GFF file: missing 'GFFI' index table. File may be corrupt or not a GFF file.");
-            }
+                if (!tablesByTag.TryGetValue("GFFI", out var gffiTable))
+                {
+                    throw new InvalidDataException(
+                        "Invalid GFF file: missing 'GFFI' index table needed for segmented chunk lists.");
+                }
 
-            foreach (var tagAndDescriptor in secondaryTableDescriptorForTag)
-            {
-                var descriptor = tagAndDescriptor.Value;
-                int secondaryTableOffset = gffiTable.GetOffset(descriptor.SecondaryTableIndex);
-                tablesByTag.Add(tagAndDescriptor.Key, SecondaryGffiTable.Create(
-                    bytes, secondaryTableOffset, descriptor.ResourceNumberingOffset));
+                foreach (var tagAndDescriptor in secondaryTableDescriptorForTag)
+                {
+                    var descriptor = tagAndDescriptor.Value;
+                    int secondaryTableOffset = gffiTable.GetOffset(descriptor.SecondaryTableIndex);
+                    tablesByTag.Add(tagAndDescriptor.Key, SecondaryGffiTable.Create(
+                        bytes, secondaryTableOffset, descriptor.ResourceNumberingOffset));
+                }
             }
 
             return tablesByTag;

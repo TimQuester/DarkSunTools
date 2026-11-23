@@ -1,18 +1,16 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using DSunTools.Common.Image;
-using DarkSunRE.Models;
-using DarkSunRE.Services;
-using System.Collections.ObjectModel;
-using DSunTools.Common.Gff;
-using System.Windows.Input;
+using System.Windows.Threading;
 using DarkSunRE.Commands;
+using DarkSunRE.Models;
+using DSunTools.Common.Gff;
+using DSunTools.Common.Image;
 
 namespace DarkSunRE.ViewModels
 {
@@ -26,9 +24,40 @@ namespace DarkSunRE.ViewModels
         private Project _project;
         private ResourceInfo _resourceInfo;
         private double _scale = 1.0;
-        private ICommand _zoomInCommand;
-        private ICommand _zoomOutCommand;
-        private ICommand _resetZoomCommand;
+        private bool _useBmaCodec;
+        private List<ImageFrame> _frames = new();
+        private int _currentFrameIndex;
+        private bool _isPlaying;
+        private DispatcherTimer _timer;
+
+        private readonly ICommand _playPauseCommand;
+        private readonly ICommand _previousFrameCommand;
+        private readonly ICommand _nextFrameCommand;
+        private readonly ICommand _zoomInCommand;
+        private readonly ICommand _zoomOutCommand;
+        private readonly ICommand _resetZoomCommand;
+
+        public ImageResourceViewModel()
+        {
+            Title = "Image";
+            ToolTip = "Image Resource";
+            CanClose = true;
+            AvailablePalettes = new ObservableCollection<PaletteInfo>();
+
+            _playPauseCommand = new RelayCommand(TogglePlayback);
+            _previousFrameCommand = new RelayCommand(PreviousFrame);
+            _nextFrameCommand = new RelayCommand(NextFrame);
+            _zoomInCommand = new RelayCommand(ZoomIn);
+            _zoomOutCommand = new RelayCommand(ZoomOut);
+            _resetZoomCommand = new RelayCommand(ResetZoom);
+
+            _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+            _timer.Tick += (_, __) =>
+            {
+                if (FrameCount > 1)
+                    CurrentFrameIndex = (CurrentFrameIndex + 1) % FrameCount;
+            };
+        }
 
         public ImageSource ImageSource
         {
@@ -47,7 +76,7 @@ namespace DarkSunRE.ViewModels
             {
                 _imageData = value;
                 OnPropertyChanged();
-                LoadImage();
+                LoadFrames();
             }
         }
 
@@ -66,9 +95,10 @@ namespace DarkSunRE.ViewModels
             get => _selectedPalette;
             set
             {
+                if (ReferenceEquals(_selectedPalette, value)) return;
                 _selectedPalette = value;
                 OnPropertyChanged();
-                LoadImage(); // Перезагружаем изображение с новой палитрой
+                RenderCurrentFrame();
             }
         }
 
@@ -87,48 +117,82 @@ namespace DarkSunRE.ViewModels
             get => _scale;
             set
             {
-                _scale = value;
+                double clamped = Math.Max(0.1, Math.Min(10.0, value));
+                if (Math.Abs(_scale - clamped) < 0.0001) return;
+                _scale = clamped;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(ScalePercentage));
+                RenderCurrentFrame();
             }
         }
 
-        public int ScalePercentage => (int)(_scale * 100);
+        public int ScalePercentage => (int)Math.Round(_scale * 100);
 
-        public ICommand ZoomInCommand => _zoomInCommand ?? (_zoomInCommand = new RelayCommand(ZoomIn));
-        public ICommand ZoomOutCommand => _zoomOutCommand ?? (_zoomOutCommand = new RelayCommand(ZoomOut));
-        public ICommand ResetZoomCommand => _resetZoomCommand ?? (_resetZoomCommand = new RelayCommand(ResetZoom));
+        public bool HasMultipleFrames => FrameCount > 1;
+        public int FrameCount => _frames?.Count ?? 0;
+        public int LastFrameIndex => Math.Max(0, FrameCount - 1);
 
-        public ImageResourceViewModel()
+        public int CurrentFrameIndex
         {
-            Title = "Image";
-            ToolTip = "Image Resource";
-            CanClose = true;
-            AvailablePalettes = new ObservableCollection<PaletteInfo>();
-            _zoomInCommand = new RelayCommand(ZoomIn);
-            _zoomOutCommand = new RelayCommand(ZoomOut);
-            _resetZoomCommand = new RelayCommand(ResetZoom);
+            get => _currentFrameIndex;
+            set
+            {
+                int clamped = Math.Max(0, Math.Min(LastFrameIndex, value));
+                if (_currentFrameIndex == clamped) return;
+                _currentFrameIndex = clamped;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(FrameLabel));
+                RenderCurrentFrame();
+            }
         }
+
+        public string FrameLabel => FrameCount == 0
+            ? string.Empty
+            : $"{CurrentFrameIndex + 1} / {FrameCount}";
+
+        public bool IsPlaying
+        {
+            get => _isPlaying;
+            private set
+            {
+                if (_isPlaying == value) return;
+                _isPlaying = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(PlayPauseText));
+                if (_isPlaying)
+                    _timer.Start();
+                else
+                    _timer.Stop();
+            }
+        }
+
+        public string PlayPauseText => IsPlaying ? "Pause" : "Play";
+
+        public ICommand PlayPauseCommand => _playPauseCommand;
+        public ICommand PreviousFrameCommand => _previousFrameCommand;
+        public ICommand NextFrameCommand => _nextFrameCommand;
+        public ICommand ZoomInCommand => _zoomInCommand;
+        public ICommand ZoomOutCommand => _zoomOutCommand;
+        public ICommand ResetZoomCommand => _resetZoomCommand;
 
         public void Initialize(Project project, ResourceInfo resourceInfo, byte[] imageData)
         {
             _project = project;
             _resourceInfo = resourceInfo;
+            _useBmaCodec = UsesBmaFrameCodec(project, resourceInfo);
             ImageData = imageData;
-            
+
             // Загружаем доступные палитры из проекта
             LoadAvailablePalettes();
-            
+
             // Устанавливаем первую палитру по умолчанию
             if (AvailablePalettes.Count > 0)
-            {
                 SelectedPalette = AvailablePalettes[0];
-            }
         }
 
         public override void Reload()
         {
-            LoadImage();
+            LoadFrames();
         }
 
         public override void Save()
@@ -136,28 +200,69 @@ namespace DarkSunRE.ViewModels
             // Для изображений сохранение не требуется
         }
 
-        private void ZoomIn()
+        private void ZoomIn() => Scale = Math.Min(10.0, _scale * 1.5);
+        private void ZoomOut() => Scale = Math.Max(0.1, _scale / 1.5);
+        private void ResetZoom() => Scale = 1.0;
+
+        private void TogglePlayback()
         {
-            if (_scale < 10.0)
-            {
-                Scale = Math.Min(_scale * 1.5, 10.0);
-                LoadImage();
-            }
+            if (FrameCount > 1)
+                IsPlaying = !IsPlaying;
         }
 
-        private void ZoomOut()
+        private void PreviousFrame()
         {
-            if (_scale > 0.1)
-            {
-                Scale = Math.Max(_scale / 1.5, 0.1);
-                LoadImage();
-            }
+            if (FrameCount == 0) return;
+            CurrentFrameIndex = CurrentFrameIndex == 0 ? LastFrameIndex : CurrentFrameIndex - 1;
         }
 
-        private void ResetZoom()
+        private void NextFrame()
         {
-            Scale = 1.0;
-            LoadImage();
+            if (FrameCount == 0) return;
+            CurrentFrameIndex = CurrentFrameIndex == LastFrameIndex ? 0 : CurrentFrameIndex + 1;
+        }
+
+        private static bool UsesBmaFrameCodec(Project project, ResourceInfo resourceInfo)
+        {
+            if (resourceInfo?.Tag == "CMAT")
+                return true;
+
+            ResourceFile container = project?.Files?.FirstOrDefault(f =>
+                f.Resources != null &&
+                f.Resources.Any(r => r.Tag == resourceInfo?.Tag && r.Number == resourceInfo?.Number));
+
+            return container?.Resources != null &&
+                   container.Resources.Any(r => r.Tag == "BMA " || r.Tag == "ACF ");
+        }
+
+        private void LoadFrames()
+        {
+            IsPlaying = false;
+            _frames = new List<ImageFrame>();
+
+            if (_imageData != null && _imageData.Length > 0)
+            {
+                try
+                {
+                    if (_useBmaCodec)
+                        _frames = BmaReader.Read(_imageData).Frames.ToList();
+                    else
+                        _frames = ImageReading.ExtractFrames(_imageData);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to decode image frames: {ex.Message}");
+                }
+            }
+
+            _currentFrameIndex = 0;
+            OnPropertyChanged(nameof(FrameCount));
+            OnPropertyChanged(nameof(HasMultipleFrames));
+            OnPropertyChanged(nameof(LastFrameIndex));
+            OnPropertyChanged(nameof(CurrentFrameIndex));
+            OnPropertyChanged(nameof(FrameLabel));
+
+            RenderCurrentFrame();
         }
 
         private void LoadAvailablePalettes()
@@ -182,8 +287,8 @@ namespace DarkSunRE.ViewModels
                             // Извлекаем данные палитры
                             var gff = GffFile.Create(file.Data);
                             var paletteData = gff.GetResourceData(resource.Tag, resource.Number);
-                            
-                            if (paletteData != null && paletteData.Length == 768) // PAL файлы обычно 768 байт
+
+                            if (paletteData != null && paletteData.Length == 768)
                             {
                                 var palette = Palette.FromPalData(paletteData);
                                 var paletteInfo = new PaletteInfo
@@ -206,97 +311,79 @@ namespace DarkSunRE.ViewModels
             }
         }
 
-        private void LoadImage()
+        private void RenderCurrentFrame()
         {
-            if (_imageData == null || _imageData.Length == 0)
+            if (_frames == null || _frames.Count == 0)
+            {
+                ImageSource = null;
                 return;
+            }
+
+            if (_currentFrameIndex < 0 || _currentFrameIndex >= _frames.Count)
+                _currentFrameIndex = 0;
 
             try
             {
-                // Извлекаем кадры изображения
-                var frames = ImageReading.ExtractFrames(_imageData);
-                if (frames.Count > 0)
+                ImageFrame frame = _frames[_currentFrameIndex];
+                var pixels = frame.GetPixels();
+                var alphaMask = frame.GetAlphaMask();
+                int width = frame.Width;
+                int height = frame.Height;
+
+                int scaledWidth = Math.Max(1, (int)Math.Round(width * _scale));
+                int scaledHeight = Math.Max(1, (int)Math.Round(height * _scale));
+                var pixelData = new byte[scaledWidth * scaledHeight * 4];
+
+                for (int y = 0; y < scaledHeight; y++)
                 {
-                    // Используем первый кадр
-                    var frame = frames[0];
-                    var pixels = frame.GetPixels();
-                    var alphaMask = frame.GetAlphaMask();
-                    int width = frame.Width;
-                    int height = frame.Height;
+                    int originalY = (int)(y / _scale);
+                    if (originalY >= height) continue;
 
-                    // Если масштаб не 1.0, создаем увеличенное изображение
-                    int scaledWidth = (int)(width * _scale);
-                    int scaledHeight = (int)(height * _scale);
-
-                    // Создаем массив пикселей для BitmapSource
-                    var pixelData = new byte[scaledWidth * scaledHeight * 4]; // 4 байта на пиксель (BGRA)
-
-                    // Заполняем пиксели с масштабированием
-                    for (int y = 0; y < scaledHeight; y++)
+                    for (int x = 0; x < scaledWidth; x++)
                     {
-                        for (int x = 0; x < scaledWidth; x++)
+                        int originalX = (int)(x / _scale);
+                        if (originalX >= width) continue;
+
+                        int pixelIndex = originalY * width + originalX;
+                        int byteIndex = (y * scaledWidth + x) * 4;
+                        byte paletteIndex = pixels[pixelIndex];
+
+                        byte red, green, blue;
+                        if (_selectedPalette?.Palette != null && paletteIndex < 256)
                         {
-                            // Определяем исходный пиксель
-                            int originalX = (int)(x / _scale);
-                            int originalY = (int)(y / _scale);
-                            
-                            // Проверяем границы
-                            if (originalX >= width || originalY >= height)
-                                continue;
-
-                            int pixelIndex = originalY * width + originalX;
-                            int scaledPixelIndex = y * scaledWidth + x;
-                            int byteIndex = scaledPixelIndex * 4; // 4 байта на пиксель (BGRA)
-
-                            // Получаем индекс пикселя из данных изображения
-                            byte paletteIndex = pixels[pixelIndex];
-
-                            // Используем выбранную палитру или фиксированную палитру по умолчанию
-                            byte red, green, blue;
-                            if (_selectedPalette?.Palette != null && paletteIndex < 256)
-                            {
-                                var color = _selectedPalette.Palette.GetColor(paletteIndex);
-                                red = (byte)color.Red;
-                                green = (byte)color.Green;
-                                blue = (byte)color.Blue;
-                            }
-                            else
-                            {
-                                // Фиксированная палитра по умолчанию
-                                red = (byte)(paletteIndex * 4);
-                                green = (byte)(paletteIndex * 2);
-                                blue = (byte)(paletteIndex * 1);
-                            }
-                            
-                            byte alpha = alphaMask.Get(pixelIndex) ? (byte)255 : (byte)0;
-
-                            // Записываем пиксель в массив (BGRA формат)
-                            pixelData[byteIndex] = blue;     // B
-                            pixelData[byteIndex + 1] = green; // G
-                            pixelData[byteIndex + 2] = red;   // R
-                            pixelData[byteIndex + 3] = alpha; // A
+                            var color = _selectedPalette.Palette.GetColor(paletteIndex);
+                            red = (byte)color.Red;
+                            green = (byte)color.Green;
+                            blue = (byte)color.Blue;
                         }
+                        else
+                        {
+                            red = (byte)(paletteIndex * 4);
+                            green = (byte)(paletteIndex * 2);
+                            blue = paletteIndex;
+                        }
+
+                        pixelData[byteIndex] = blue;
+                        pixelData[byteIndex + 1] = green;
+                        pixelData[byteIndex + 2] = red;
+                        pixelData[byteIndex + 3] = alphaMask.Get(pixelIndex) ? (byte)255 : (byte)0;
                     }
-
-                    // Создаем BitmapSource из массива пикселей
-                    var bitmap = BitmapSource.Create(
-                        scaledWidth,
-                        scaledHeight,
-                        96, // DPI X
-                        96, // DPI Y
-                        PixelFormats.Bgra32,
-                        null, // палитра
-                        pixelData,
-                        scaledWidth * 4 // шаг строки
-                    );
-
-                    ImageSource = bitmap;
                 }
+
+                ImageSource = BitmapSource.Create(
+                    scaledWidth,
+                    scaledHeight,
+                    96,
+                    96,
+                    PixelFormats.Bgra32,
+                    null,
+                    pixelData,
+                    scaledWidth * 4);
             }
             catch (Exception ex)
             {
-                // В случае ошибки создаем пустое изображение
                 ImageSource = null;
+                System.Diagnostics.Debug.WriteLine($"Failed to render image frame: {ex.Message}");
             }
         }
     }

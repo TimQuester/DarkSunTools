@@ -1,4 +1,4 @@
-﻿using DarkSunRE.Models;
+using DarkSunRE.Models;
 using DarkSunRE.ViewModels;
 using DSunTools.Common.Image;
 using DSunTools.Common.Gff;
@@ -43,6 +43,7 @@ namespace DarkSunRE.Services
                 ResourceType.Script => CreateGplDocumentViewModel(resourceInfo, data),
                 ResourceType.Text => CreateTextResourceViewModel(resourceInfo, data),
                 ResourceType.Image => CreateImageResourceViewModel(resourceInfo, data),
+                ResourceType.Animation => CreateAnimationResourceViewModel(resourceInfo, data),
                 ResourceType.Palette => CreatePaletteViewModel(resourceInfo, data),
                 ResourceType.Font => CreateFontResourceViewModel(resourceInfo, data),
                 ResourceType.Name => CreateNameResourceViewModel(resourceInfo, data),
@@ -79,7 +80,7 @@ namespace DarkSunRE.Services
                 ResourceType.Item => ".itm",
                 ResourceType.Character => ".chr",
                 ResourceType.Map => ".map",
-                ResourceType.Animation => ".anm",
+                ResourceType.Animation => ".bma",
                 ResourceType.RawData => ".dat",
                 ResourceType.AnimationControl => ".acf",
                 ResourceType.Name => ".nam",
@@ -420,6 +421,13 @@ namespace DarkSunRE.Services
             // viewModel.Title = $"{resourceInfo.Tag}-{resourceInfo.Number}";
             // viewModel.File = $"{resourceInfo.Tag}-{resourceInfo.Number}";
             return viewModel;
+        }
+
+        private DocumentViewModel CreateAnimationResourceViewModel(ResourceInfo resourceInfo, byte[] data)
+        {
+            // The project and resource are supplied by MainWindow once the
+            // view model is created, same as for images and fonts.
+            return new AnimationResourceViewModel();
         }
 
         private DocumentViewModel CreatePaletteViewModel(ResourceInfo resourceInfo, byte[] data)

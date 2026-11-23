@@ -1,28 +1,74 @@
-# This workflow will build a .NET project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
-
-name: .NET
+name: Build
 
 on:
   push:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
-
-    runs-on: ubuntu-latest
+    name: Build and test
+    runs-on: windows-latest
+    timeout-minutes: 20
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 8.0.x
-    - name: Restore dependencies
-      run: dotnet restore
-    - name: Build
-      run: dotnet build --no-restore
-    - name: Test
-      run: dotnet test --no-build --verbosity normal
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Set up NuGet cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore DSunTools.sln
+        env:
+          DOTNET_NOLOGO: true
+          DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+      - name: Build
+        run: dotnet build DSunTools.sln --configuration Release --no-restore
+        env:
+          DOTNET_NOLOGO: true
+          DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+      - name: Test
+        run: >
+          dotnet test ToolsTests/ToolsTests.csproj
+          --configuration Release
+          --no-build
+          --no-restore
+          --verbosity normal
+          --results-directory TestResults
+          --logger "trx;LogFileName=test-results.trx"
+        env:
+          DOTNET_NOLOGO: true
+          DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults/test-results.trx
+          if-no-files-found: warn
+
+      - name: Upload application
+        uses: actions/upload-artifact@v4
+        with:
+          name: DarkSunRE-win-x64
+          path: DarkSunRE/bin/Release/net9.0-windows7.0/
+          if-no-files-found: error

@@ -216,7 +216,10 @@ namespace DarkSunRE.ViewModels
                 f.Resources.Any(r => r.Tag == _resourceInfo?.Tag && r.Number == _resourceInfo?.Number));
 
             if (container != null)
+            {
+                AddAcfPalette(container);
                 AddPalettesFromFile(container);
+            }
 
             // Fall back to all project palettes when the animation's GFF
             // does not carry its own palette (for example OBJEX.GFF).
@@ -256,6 +259,85 @@ namespace DarkSunRE.ViewModels
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Failed to load palettes from {file.Name}: {ex.Message}");
+            }
+        }
+
+        private void AddAcfPalette(ResourceFile container)
+        {
+            if (container?.Resources == null || _resourceInfo == null)
+                return;
+
+            try
+            {
+                GffFile gff = GffFile.Create(container.Data);
+                var acfResources = container.Resources
+                    .Where(r => r.Tag == "ACF ")
+                    .OrderBy(r => r.Number)
+                    .ToList();
+                if (acfResources.Count == 0)
+                    return;
+
+                int bmaId = _resourceInfo.Number;
+                AcfPaletteInfo exact = null;
+                var exactResource = acfResources.FirstOrDefault(r => r.Number == bmaId);
+                if (exactResource != null)
+                    exact = AcfPaletteReader.Read(gff.GetResourceData(exactResource.Tag, exactResource.Number));
+
+                if (exact?.BuiltPalette != null)
+                {
+                    AvailablePalettes.Add(new PaletteInfo
+                    {
+                        Palette = exact.BuiltPalette,
+                        Name = $"ACF {bmaId}",
+                        Tag = "ACF ",
+                        Number = bmaId
+                    });
+                    return;
+                }
+
+                // Some scripts have no palette ops of their own; the intro
+                // plays them in sequence and the last committed palette
+                // carries over.
+                foreach (var acfResource in acfResources.Where(r => r.Number < bmaId).OrderByDescending(r => r.Number))
+                {
+                    AcfPaletteInfo previous = AcfPaletteReader.Read(
+                        gff.GetResourceData(acfResource.Tag, acfResource.Number));
+                    if (previous.BuiltPalette == null)
+                        continue;
+
+                    AvailablePalettes.Add(new PaletteInfo
+                    {
+                        Palette = previous.BuiltPalette,
+                        Name = $"ACF {acfResource.Number} (inherited)",
+                        Tag = "ACF ",
+                        Number = acfResource.Number
+                    });
+                    return;
+                }
+
+                if (exact?.PaletteChunkId is int paletteId)
+                {
+                    ResourceInfo paletteResource = container.Resources
+                        .FirstOrDefault(r => r.Tag == "PAL " && r.Number == paletteId);
+                    if (paletteResource != null)
+                    {
+                        byte[] paletteData = gff.GetResourceData(paletteResource.Tag, paletteResource.Number);
+                        if (paletteData != null && paletteData.Length == 768)
+                        {
+                            AvailablePalettes.Add(new PaletteInfo
+                            {
+                                Palette = Palette.FromPalData(paletteData),
+                                Name = $"PAL {paletteId} (from ACF {bmaId})",
+                                Tag = "PAL ",
+                                Number = paletteId
+                            });
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to read ACF palette: {ex.Message}");
             }
         }
 

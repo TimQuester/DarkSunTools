@@ -66,13 +66,18 @@ namespace DarkSunRE.Services
             if (frame.Format != PixelFormats.Indexed8)
             {
                 throw new InvalidDataException(
-                    $"PNG must be an 8-bit indexed image (256 colors); got {frame.Format}.");
+                    $"PNG must be an 8-bit indexed image; got {frame.Format}.");
             }
 
-            if (frame.Palette == null || frame.Palette.Colors.Count != 256)
+            // Image editors often optimize an indexed PNG to only the colors
+            // actually used (for example 38 instead of 256). The indices are
+            // still 8-bit; BMA itself stores no palette, so a shorter PNG
+            // palette is valid as long as it does not exceed 256 entries.
+            if (frame.Palette == null || frame.Palette.Colors.Count == 0 || frame.Palette.Colors.Count > 256)
             {
                 throw new InvalidDataException(
-                    $"PNG must contain a 256-entry palette; got {frame.Palette?.Colors.Count ?? 0} entries.");
+                    $"PNG must contain an indexed palette of 1..256 entries; " +
+                    $"got {frame.Palette?.Colors.Count ?? 0} entries.");
             }
 
             int stride = (frame.PixelWidth * frame.Format.BitsPerPixel + 7) / 8;

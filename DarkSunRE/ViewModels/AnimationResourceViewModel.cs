@@ -550,8 +550,28 @@ namespace DarkSunRE.ViewModels
                         "the game palette comes from the animation script/PAL chunks.");
                 }
 
+                if (_selectedPalette == null)
+                {
+                    throw new InvalidOperationException(
+                        "Select the game palette (ACF or PAL) before importing; " +
+                        "PNG indices are remapped through it.");
+                }
+
                 int originalFrameCount = _animation?.Frames.Count ?? 0;
-                var framePixels = imported.Select(frame => frame.Pixels).ToList();
+                var framePixels = new List<byte[]>(imported.Count);
+                int nearestPixels = 0;
+                for (int i = 0; i < imported.Count; i++)
+                {
+                    Palette targetPalette = GetPaletteForFrame(i);
+                    if (targetPalette == null)
+                        throw new InvalidOperationException($"No palette is available for frame {i}.");
+
+                    AnimationPngCodec.PaletteRemapResult remap =
+                        AnimationPngCodec.RemapToPalette(imported[i], targetPalette);
+                    framePixels.Add(remap.Pixels);
+                    nearestPixels += remap.NearestPixels;
+                }
+
                 byte[] bma = BmaWriter.Write(framePixels, width, height);
 
                 _animationData = bma;
@@ -564,14 +584,21 @@ namespace DarkSunRE.ViewModels
                 LoadAnimation();
                 IsModified = true;
 
+                if (nearestPixels > 0)
+                {
+                    _statusService?.ShowWarning(
+                        $"{nearestPixels} pixel(s) had no exact RGB match in the selected palette; " +
+                        "the nearest game colors were used. Check that the ACF/PAL palette matches the PNG.");
+                }
+
                 string countNote = originalFrameCount > 0 && originalFrameCount != imported.Count
                     ? " Frame count differs from the original; check the ACF timing."
                     : string.Empty;
                 string targetName = $"{_resourceInfo.Tag.Trim()}-{_resourceInfo.Number}";
                 _statusService?.ShowSuccess(
                     $"Imported {imported.Count} PNG frames into {targetName} (replacing the existing BMA chunk). " +
-                    "Use Generate new file to write it into the GFF." +
-                    " The PNG palette is not stored in BMA; the ACF/PAL palette is used in-game." +
+                    "Palette indices were remapped from the PNG colors to the selected game palette; " +
+                    "use Generate new file to write it into the GFF." +
                     countNote);
             }
             catch (Exception ex)

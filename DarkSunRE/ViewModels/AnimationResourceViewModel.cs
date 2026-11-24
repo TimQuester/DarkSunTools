@@ -469,24 +469,60 @@ namespace DarkSunRE.ViewModels
 
         private void ImportPngFrames()
         {
+            if (_resourceInfo == null)
+            {
+                _statusService?.ShowError(
+                    "Open an existing BMA resource before importing; the import replaces that resource.");
+                return;
+            }
+
             var dialog = new OpenFolderDialog { Title = "Select folder with animation PNG frames" };
             if (dialog.ShowDialog() != true)
                 return;
 
             try
             {
-                var entries = Directory.GetFiles(dialog.FolderName, "*.png")
-                    .Select(path => new { Path = path, Number = ParseFrameNumber(path) })
-                    .Where(entry => entry.Number.HasValue)
-                    .OrderBy(entry => entry.Number.Value)
+                var allEntries = Directory.GetFiles(dialog.FolderName, "*.png")
+                    .Select(ParseFrameFile)
+                    .OfType<PngFrameFile>()
                     .ToList();
 
-                if (entries.Count == 0)
+                if (allEntries.Count == 0)
                     throw new InvalidDataException(
                         "No PNG frames with a numeric suffix were found (expected name_000.png).");
 
-                if (entries.GroupBy(entry => entry.Number.Value).Any(group => group.Count() > 1))
-                    throw new InvalidDataException("The PNG folder contains duplicate frame numbers.");
+                // A folder may contain exported frames for several BMA
+                // resources (BMA-2_000.png, BMA-3_000.png, ...). Pick the
+                // frames belonging to the animation currently open instead
+                // of treating their identical frame numbers as duplicates.
+                string targetBase = GetFrameBaseName();
+                var entries = allEntries
+                    .Where(entry => string.Equals(entry.BaseName, targetBase, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(entry => entry.Number)
+                    .ToList();
+
+                if (entries.Count == 0)
+                {
+                    var bases = allEntries
+                        .Select(entry => entry.BaseName)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                    if (bases.Count > 1)
+                    {
+                        throw new InvalidDataException(
+                            $"The folder contains frames for several animations " +
+                            $"({string.Join(", ", bases.Take(6))}); expected {targetBase}_000.png.");
+                    }
+
+                    // A single differently-named animation is still allowed;
+                    // the user may have renamed the exported files.
+                    entries = allEntries.OrderBy(entry => entry.Number).ToList();
+                }
+
+                if (entries.GroupBy(entry => entry.Number).Any(group => group.Count() > 1))
+                    throw new InvalidDataException(
+                        $"The folder contains duplicate frame numbers for {targetBase}.");
 
                 var imported = new List<AnimationPngCodec.ImportedFrame>();
                 foreach (var entry in entries)
@@ -531,8 +567,10 @@ namespace DarkSunRE.ViewModels
                 string countNote = originalFrameCount > 0 && originalFrameCount != imported.Count
                     ? " Frame count differs from the original; check the ACF timing."
                     : string.Empty;
+                string targetName = $"{_resourceInfo.Tag.Trim()}-{_resourceInfo.Number}";
                 _statusService?.ShowSuccess(
-                    $"Imported {imported.Count} PNG frames. Use Generate new file to write them into the GFF." +
+                    $"Imported {imported.Count} PNG frames into {targetName} (replacing the existing BMA chunk). " +
+                    "Use Generate new file to write it into the GFF." +
                     " The PNG palette is not stored in BMA; the ACF/PAL palette is used in-game." +
                     countNote);
             }
@@ -564,13 +602,26 @@ namespace DarkSunRE.ViewModels
             return string.IsNullOrWhiteSpace(raw) ? "animation" : raw;
         }
 
-        private static int? ParseFrameNumber(string path)
+        private sealed class PngFrameFile
+        {
+            public string Path { get; init; }
+            public string BaseName { get; init; }
+            public int Number { get; init; }
+        }
+
+        private static PngFrameFile? ParseFrameFile(string path)
         {
             string name = Path.GetFileNameWithoutExtension(path);
-            Match match = Regex.Match(name, @"_(\d+)$");
-            return match.Success && int.TryParse(match.Groups[1].Value, out int value)
-                ? value
-                : null;
+            Match match = Regex.Match(name, @"^(.*)_(\d+)$");
+            if (!match.Success || !int.TryParse(match.Groups[2].Value, out int number))
+                return null;
+
+            return new PngFrameFile
+            {
+                Path = path,
+                BaseName = match.Groups[1].Value,
+                Number = number
+            };
         }
 
         private static bool PalettesEqual(

@@ -176,5 +176,42 @@ namespace Dsun.Common.Tests
             Assert.True(gff.HasResource("TEST", 0));
             Assert.Equal(data, gff.GetResourceData("TEST", 0));
         }
+
+        [Fact]
+        public void GrowingResource_InsertsBeforeToc()
+        {
+            byte[] data = { 1, 2, 3, 4 };
+
+            const int tocOffset = 32;
+            using var ms = new MemoryStream();
+            using var writer = new BinaryWriter(ms);
+            writer.Write((byte)'G'); writer.Write((byte)'F'); writer.Write((byte)'F'); writer.Write((byte)'I');
+            writer.Write(0x00030000);
+            writer.Write(28);
+            writer.Write(tocOffset);
+            writer.Write(32); // TOC length
+            writer.Write(0);
+            writer.Write(1);
+            writer.Write(data);
+            writer.Write(8);  // types offset
+            writer.Write(30); // free-list offset
+            writer.Write((ushort)1);
+            writer.Write((byte)'T'); writer.Write((byte)'E'); writer.Write((byte)'S'); writer.Write((byte)'T');
+            writer.Write(1);
+            writer.Write(0);
+            writer.Write(28);
+            writer.Write(4);
+            writer.Write((ushort)0);
+
+            GffFile gff = GffFile.Create(ms.ToArray());
+            byte[] replacement = { 9, 8, 7, 6, 5, 4, 3, 2 };
+
+            byte[] updated = gff.ReplaceResource("TEST", 0, replacement);
+            GffFile reparsed = GffFile.Create(updated);
+
+            Assert.Equal(replacement, reparsed.GetResourceData("TEST", 0));
+            Assert.Equal(tocOffset + replacement.Length, BitConverter.ToInt32(updated, 12));
+            Assert.Equal(updated.Length, tocOffset + replacement.Length + 32);
+        }
     }
 }

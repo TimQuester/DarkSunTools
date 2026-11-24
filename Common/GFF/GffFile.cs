@@ -188,33 +188,44 @@ namespace DSunTools.Common.Gff
             }
 
             int newSize = replacement.Length;
+            int oldSize = table.GetSize(index.Value);
+            int tocLocation = BitConverter.ToInt32(bytes, 12);
+
+            byte[] bytesWithReplacement;
             int newOffset;
-            if (newSize <= table.GetSize(index.Value))
+
+            if (newSize <= oldSize)
             {
                 // The replacement fits in the old space.
                 newOffset = table.GetOffset(index.Value);
-            }
-            else
-            {
-                // The (larger) replacement must be appended to the end of the file.
-                newOffset = bytes.Length;
+                table.SetOffset(index.Value, newOffset);
+                table.SetSize(index.Value, newSize);
+                bytesWithReplacement = (byte[])bytes.Clone();
+                Array.Copy(replacement, 0, bytesWithReplacement, newOffset, newSize);
+                return bytesWithReplacement;
             }
 
+            // The data area ends at the TOC. Insert a larger resource before
+            // the TOC and shift the TOC (and any trailing bytes) instead of
+            // appending after it; a chunk offset outside the declared data
+            // area is not valid GFF.
+            newOffset = tocLocation;
             table.SetOffset(index.Value, newOffset);
             table.SetSize(index.Value, newSize);
 
-            byte[] bytesWithReplacement;
-            if (newOffset < bytes.Length)
-            {
-                bytesWithReplacement = (byte[])bytes.Clone();
-            }
-            else
-            {
-                bytesWithReplacement = new byte[bytes.Length + newSize];
-                Array.Copy(bytes, 0, bytesWithReplacement, 0, bytes.Length);
-            }
+            bytesWithReplacement = new byte[bytes.Length + newSize];
+            Array.Copy(bytes, 0, bytesWithReplacement, 0, tocLocation);
+            Array.Copy(replacement, 0, bytesWithReplacement, tocLocation, newSize);
+            Array.Copy(
+                bytes,
+                tocLocation,
+                bytesWithReplacement,
+                tocLocation + newSize,
+                bytes.Length - tocLocation);
 
-            Array.Copy(replacement, 0, bytesWithReplacement, newOffset, newSize);
+            byte[] tocLocationBytes = BitConverter.GetBytes(tocLocation + newSize);
+            Array.Copy(tocLocationBytes, 0, bytesWithReplacement, 12, 4);
+
             return bytesWithReplacement;
         }
     }

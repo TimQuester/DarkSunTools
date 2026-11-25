@@ -12,10 +12,26 @@ namespace DSunTools.Common.Image
     public static class BmaWriter
     {
         private const int LastRecordFlag = 0x8000;
-        private const int MaxSpanPerRecord = 128;
+        private const int MaxSpanPerRecord = 255;
         private const byte EndOfFrame = 0xFF;
 
         public static byte[] Write(IReadOnlyList<byte[]> frames, int width, int height)
+        {
+            return Write(frames, width, height, null);
+        }
+
+        /// <summary>
+        /// Encode frames into BMA containers. When
+        /// <paramref name="containerFrameCounts"/> is supplied, the original
+        /// container/frame grouping is preserved. ACF op-01 segment records
+        /// mirror this grouping, so preserving it is required for an edited
+        /// cinematic to play correctly in the game.
+        /// </summary>
+        public static byte[] Write(
+            IReadOnlyList<byte[]> frames,
+            int width,
+            int height,
+            IReadOnlyList<int>? containerFrameCounts)
         {
             if (frames == null) throw new ArgumentNullException(nameof(frames));
             if (width <= 0 || height <= 0)
@@ -23,31 +39,94 @@ namespace DSunTools.Common.Image
             if (frames.Count == 0)
                 throw new ArgumentException("At least one frame is required.", nameof(frames));
 
+            var groups = containerFrameCounts ?? SingleFrameContainers(frames.Count);
+            int groupedFrames = 0;
+            foreach (int count in groups)
+            {
+                if (count <= 0)
+                    throw new ArgumentException("Container frame counts must be positive.", nameof(containerFrameCounts));
+                groupedFrames += count;
+            }
+
+            if (groupedFrames != frames.Count)
+            {
+                throw new ArgumentException(
+                    $"Container layout describes {groupedFrames} frames, but {frames.Count} were supplied.",
+                    nameof(containerFrameCounts));
+            }
+
             using var output = new MemoryStream();
             using var writer = new BinaryWriter(output);
 
             var previous = new byte[width * height];
-            for (int frameIndex = 0; frameIndex < frames.Count; frameIndex++)
-            {
-                byte[] frame = frames[frameIndex];
-                if (frame == null || frame.Length != previous.Length)
-                    throw new ArgumentException(
-                        $"Every BMA frame must be exactly {width * height} pixels.", nameof(frames));
+            int frameIndex = 0;
 
-                // The first frame is a full keyframe: the engine canvas may
-                // still contain the previous cinematic's picture.
-                byte[] body = EncodeFrame(frame, previous, width, height, forceAll: frameIndex == 0);
-                int containerSize = 10 + body.Length;
+            foreach (int frameCount in groups)
+            {
+                if (frameCount > ushort.MaxValue)
+                    throw new InvalidDataException("A BMA container cannot hold more than 65535 frames.");
+
+                var bodies = new List<byte[]>(frameCount);
+                for (int i = 0; i < frameCount; i++)
+                {
+                    byte[] frame = frames[frameIndex];
+                    if (frame == null || frame.Length != previous.Length)
+                    {
+                        throw new ArgumentException(
+                            $"Every BMA frame must be exactly {width * height} pixels.", nameof(frames));
+                    }
+
+                    // The first frame is a full keyframe: the engine canvas
+                    // may still contain the previous cinematic's picture.
+                    byte[] body = EncodeFrame(
+                        frame,
+                        previous,
+                        width,
+                        height,
+                        forceAll: frameIndex == 0);
+                    bodies.Add(body);
+
+                    Buffer.BlockCopy(frame, 0, previous, 0, previous.Length);
+                    frameIndex++;
+                }
+
+                int headerSize = 6 + frameCount * 4;
+                int containerSize = headerSize;
+                foreach (byte[] body in bodies)
+                    containerSize += body.Length;
+
+                // ACF op-01 stores the segment byte size in a u16.
+                if (containerSize > ushort.MaxValue)
+                {
+                    throw new InvalidDataException(
+                        $"Encoded BMA container is {containerSize} bytes; " +
+                        "the ACF segment size field supports at most 65535 bytes. " +
+                        "Reduce the changed area in this group of frames.");
+                }
 
                 writer.Write((uint)containerSize);
-                writer.Write((ushort)1);
-                writer.Write((uint)10);
-                writer.Write(body);
+                writer.Write((ushort)frameCount);
 
-                Buffer.BlockCopy(frame, 0, previous, 0, previous.Length);
+                int frameOffset = headerSize;
+                foreach (byte[] body in bodies)
+                {
+                    writer.Write((uint)frameOffset);
+                    frameOffset += body.Length;
+                }
+
+                foreach (byte[] body in bodies)
+                    writer.Write(body);
             }
 
             return output.ToArray();
+        }
+
+        private static IReadOnlyList<int> SingleFrameContainers(int frameCount)
+        {
+            var result = new int[frameCount];
+            for (int i = 0; i < result.Length; i++)
+                result[i] = 1;
+            return result;
         }
 
         private static byte[] EncodeFrame(byte[] current, byte[] previous, int width, int height, bool forceAll)
@@ -58,7 +137,7 @@ namespace DSunTools.Common.Image
             writer.Write((ushort)width);
             writer.Write((ushort)height);
 
-            var rowChunks = new List<(int X, int Span)>();
+            var rowChunks = new List<(int X, int Span, byte[] Rle)>();
             for (int y = 0; y < height; y++)
             {
                 rowChunks.Clear();
@@ -85,7 +164,20 @@ namespace DSunTools.Common.Image
                     while (remaining > 0)
                     {
                         int chunk = Math.Min(MaxSpanPerRecord, remaining);
-                        rowChunks.Add((offset, chunk));
+                        byte[] rle = EncodeRowRle(current, rowStart + offset, chunk);
+
+                        // A literal-heavy span can exceed the one-byte RLE
+                        // length. Shrink the record until it fits.
+                        while (rle.Length > byte.MaxValue && chunk > 1)
+                        {
+                            chunk--;
+                            rle = EncodeRowRle(current, rowStart + offset, chunk);
+                        }
+
+                        if (rle.Length > byte.MaxValue)
+                            throw new InvalidDataException("BMA RLE record exceeds 255 bytes.");
+
+                        rowChunks.Add((offset, chunk, rle));
                         offset += chunk;
                         remaining -= chunk;
                     }
@@ -97,15 +189,10 @@ namespace DSunTools.Common.Image
                 writer.Write((byte)y);
                 for (int i = 0; i < rowChunks.Count; i++)
                 {
-                    var (chunkX, chunkSpan) = rowChunks[i];
+                    var (chunkX, chunkSpan, rle) = rowChunks[i];
                     bool last = i == rowChunks.Count - 1;
                     writer.Write((ushort)(chunkX | (last ? LastRecordFlag : 0)));
                     writer.Write((byte)chunkSpan);
-
-                    byte[] rle = EncodeRowRle(current, rowStart + chunkX, chunkSpan);
-                    if (rle.Length > byte.MaxValue)
-                        throw new InvalidDataException("BMA RLE record exceeds 255 bytes.");
-
                     writer.Write((byte)rle.Length);
                     writer.Write(rle);
                 }

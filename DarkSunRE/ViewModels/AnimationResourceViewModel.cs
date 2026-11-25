@@ -558,6 +558,14 @@ namespace DarkSunRE.ViewModels
                 }
 
                 int originalFrameCount = _animation?.Frames.Count ?? 0;
+                if (_animation != null && imported.Count != originalFrameCount)
+                {
+                    throw new InvalidDataException(
+                        $"The original BMA has {originalFrameCount} frames, but {imported.Count} " +
+                        "PNG frames were supplied. The ACF playback script expects the original " +
+                        "frame count, so the frame count cannot be changed by this import.");
+                }
+
                 var framePixels = new List<byte[]>(imported.Count);
                 int nearestPixels = 0;
                 for (int i = 0; i < imported.Count; i++)
@@ -572,7 +580,11 @@ namespace DarkSunRE.ViewModels
                     nearestPixels += remap.NearestPixels;
                 }
 
-                byte[] bma = BmaWriter.Write(framePixels, width, height);
+                var containerLayout = _animation?.Containers.Select(container => container.FrameCount).ToList();
+                byte[] bma = BmaWriter.Write(framePixels, width, height, containerLayout);
+                BmaAnimation encoded = BmaReader.Read(bma);
+                bool acfPatched = containerLayout != null &&
+                    PatchAcfSegmentSizes(encoded.Containers.Select(container => container.Size).ToList());
 
                 _animationData = bma;
                 if (_resourceInfo != null)
@@ -595,16 +607,53 @@ namespace DarkSunRE.ViewModels
                     ? " Frame count differs from the original; check the ACF timing."
                     : string.Empty;
                 string targetName = $"{_resourceInfo.Tag.Trim()}-{_resourceInfo.Number}";
+                string acfNote = acfPatched
+                    ? " ACF segment sizes were updated to match the new containers."
+                    : string.Empty;
                 _statusService?.ShowSuccess(
                     $"Imported {imported.Count} PNG frames into {targetName} (replacing the existing BMA chunk). " +
-                    "Palette indices were remapped from the PNG colors to the selected game palette; " +
-                    "use Generate new file to write it into the GFF." +
+                    "Palette indices were remapped from the PNG colors to the selected game palette." +
+                    acfNote +
+                    " Use Generate new file to write it into the GFF." +
                     countNote);
             }
             catch (Exception ex)
             {
                 _statusService?.ShowError($"Failed to import animation frames: {ex.Message}", ex);
             }
+        }
+
+        /// <summary>
+        /// Keep the ACF op-01 segment byte sizes in sync with the rebuilt BMA.
+        /// The engine seeks by these sizes; stale values stop playback after
+        /// the first container or make it crash.
+        /// </summary>
+        private bool PatchAcfSegmentSizes(IReadOnlyList<int> containerSizes)
+        {
+            if (_project?.Files == null || _resourceInfo == null)
+                return false;
+
+            ResourceFile container = _project.Files.FirstOrDefault(file =>
+                file.Resources != null &&
+                file.Resources.Any(resource =>
+                    resource.Tag == _resourceInfo.Tag && resource.Number == _resourceInfo.Number));
+            if (container?.Resources == null || container.Data == null)
+                return false;
+
+            ResourceInfo acfResource = container.Resources.FirstOrDefault(resource =>
+                resource.Tag == "ACF " && resource.Number == _resourceInfo.Number);
+            if (acfResource == null)
+                return false;
+
+            GffFile gff = GffFile.Create(container.Data);
+            byte[] acfData = acfResource.ModifiedData
+                             ?? gff.GetResourceData(acfResource.Tag, acfResource.Number);
+            byte[] patched = AcfSegmentPatcher.UpdateSegmentSizes(acfData, containerSizes);
+
+            acfResource.ModifiedData = patched;
+            acfResource.IsModified = true;
+            container.IsModified = true;
+            return true;
         }
 
         private Palette GetPaletteForFrame(int frameIndex)

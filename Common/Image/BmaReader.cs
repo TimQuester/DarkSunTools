@@ -10,18 +10,44 @@ namespace DSunTools.Common.Image
     /// canvas of the previous frame, exactly like the game's cinematic
     /// player does.
     /// </summary>
+    public sealed class BmaContainerInfo
+    {
+        public BmaContainerInfo(int offset, int size, int frameCount)
+        {
+            Offset = offset;
+            Size = size;
+            FrameCount = frameCount;
+        }
+
+        public int Offset { get; }
+        public int Size { get; }
+        public int FrameCount { get; }
+    }
+
     public sealed class BmaAnimation
     {
-        public BmaAnimation(int width, int height, IReadOnlyList<ImageFrame> frames)
+        public BmaAnimation(
+            int width,
+            int height,
+            IReadOnlyList<ImageFrame> frames,
+            IReadOnlyList<BmaContainerInfo> containers)
         {
             Width = width;
             Height = height;
             Frames = frames ?? throw new ArgumentNullException(nameof(frames));
+            Containers = containers ?? throw new ArgumentNullException(nameof(containers));
         }
 
         public int Width { get; }
         public int Height { get; }
         public IReadOnlyList<ImageFrame> Frames { get; }
+
+        /// <summary>
+        /// Container boundaries as stored in the chunk. ACF op-01 segment
+        /// registrations mirror this list, so imports that preserve the
+        /// layout can keep the cinematic script valid.
+        /// </summary>
+        public IReadOnlyList<BmaContainerInfo> Containers { get; }
     }
 
     /// <summary>
@@ -50,6 +76,7 @@ namespace DSunTools.Common.Image
                 throw new InvalidDataException("BMA chunk is too small for a container header.");
 
             var frames = new List<ImageFrame>();
+            var containers = new List<BmaContainerInfo>();
             byte[] canvas = null;
             int width = 0;
             int height = 0;
@@ -66,6 +93,7 @@ namespace DSunTools.Common.Image
 
                 int containerEnd = containerOffset + containerSize;
                 int frameCount = ReadUInt16(data, containerOffset + 4);
+                containers.Add(new BmaContainerInfo(containerOffset, containerSize, frameCount));
                 int headerSize = 6 + frameCount * 4;
                 if (headerSize > containerSize)
                 {
@@ -102,7 +130,7 @@ namespace DSunTools.Common.Image
             if (frames.Count == 0)
                 throw new InvalidDataException("BMA chunk contains no frames.");
 
-            return new BmaAnimation(width, height, frames);
+            return new BmaAnimation(width, height, frames, containers);
         }
 
         private static void DecodeFrame(byte[] data, int frameOffset, int containerEnd, byte[] canvas, int width, int height)

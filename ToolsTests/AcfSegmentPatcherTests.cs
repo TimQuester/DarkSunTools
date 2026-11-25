@@ -27,6 +27,30 @@ namespace Dsun.Common.Tests
         }
 
         [Fact]
+        public void RebuildsSegmentTableForSplitContainers()
+        {
+            byte[] acf = BuildAcf(
+                (0, 74, 65368),
+                (1, 11, 3230));
+
+            byte[] rebuilt = AcfSegmentPatcher.RebuildSegments(
+                acf,
+                new[]
+                {
+                    new AcfSegmentInfo(0, 40, 65000),
+                    new AcfSegmentInfo(1, 34, 64000),
+                    new AcfSegmentInfo(2, 11, 3230)
+                });
+
+            var segments = AcfSegmentPatcher.ReadSegments(rebuilt);
+            Assert.Equal(3, segments.Count);
+            Assert.Equal(65368, AcfSegmentPatcher.ReadSegments(acf)[0].ByteSize);
+            Assert.Equal(65000, segments[0].ByteSize);
+            Assert.Equal(64000, segments[1].ByteSize);
+            Assert.Equal(3230, segments[2].ByteSize);
+        }
+
+        [Fact]
         public void RejectsWrongSegmentCount()
         {
             byte[] acf = BuildAcf((0, 27, 62019));

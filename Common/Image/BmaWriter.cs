@@ -55,70 +55,98 @@ namespace DSunTools.Common.Image
                     nameof(containerFrameCounts));
             }
 
+            var previous = new byte[width * height];
+            var bodies = new List<byte[]>(frames.Count);
+            for (int frameIndex = 0; frameIndex < frames.Count; frameIndex++)
+            {
+                byte[] frame = frames[frameIndex];
+                if (frame == null || frame.Length != previous.Length)
+                {
+                    throw new ArgumentException(
+                        $"Every BMA frame must be exactly {width * height} pixels.", nameof(frames));
+                }
+
+                // The first frame is a full keyframe: the engine canvas may
+                // still contain the previous cinematic's picture.
+                bodies.Add(EncodeFrame(
+                    frame,
+                    previous,
+                    width,
+                    height,
+                    forceAll: frameIndex == 0));
+                Buffer.BlockCopy(frame, 0, previous, 0, previous.Length);
+            }
+
             using var output = new MemoryStream();
             using var writer = new BinaryWriter(output);
 
-            var previous = new byte[width * height];
-            int frameIndex = 0;
-
+            int currentFrame = 0;
             foreach (int frameCount in groups)
             {
                 if (frameCount > ushort.MaxValue)
                     throw new InvalidDataException("A BMA container cannot hold more than 65535 frames.");
 
-                var bodies = new List<byte[]>(frameCount);
-                for (int i = 0; i < frameCount; i++)
+                int groupEnd = currentFrame + frameCount;
+                while (currentFrame < groupEnd)
                 {
-                    byte[] frame = frames[frameIndex];
-                    if (frame == null || frame.Length != previous.Length)
+                    int containerStart = currentFrame;
+                    int containerSize = 6; // u32 size + u16 frame count
+
+                    while (currentFrame < groupEnd)
                     {
-                        throw new ArgumentException(
-                            $"Every BMA frame must be exactly {width * height} pixels.", nameof(frames));
+                        int nextSize = containerSize + 4 + bodies[currentFrame].Length;
+                        if (nextSize > ushort.MaxValue && currentFrame > containerStart)
+                            break;
+
+                        containerSize = nextSize;
+                        currentFrame++;
                     }
 
-                    // The first frame is a full keyframe: the engine canvas
-                    // may still contain the previous cinematic's picture.
-                    byte[] body = EncodeFrame(
-                        frame,
-                        previous,
-                        width,
-                        height,
-                        forceAll: frameIndex == 0);
-                    bodies.Add(body);
+                    if (containerSize > ushort.MaxValue)
+                    {
+                        throw new InvalidDataException(
+                            $"A single BMA frame body plus its container header is " +
+                            $"{containerSize} bytes; the ACF segment size field supports " +
+                            "at most 65535 bytes.");
+                    }
 
-                    Buffer.BlockCopy(frame, 0, previous, 0, previous.Length);
-                    frameIndex++;
+                    WriteContainer(writer, bodies, containerStart, currentFrame - containerStart);
                 }
-
-                int headerSize = 6 + frameCount * 4;
-                int containerSize = headerSize;
-                foreach (byte[] body in bodies)
-                    containerSize += body.Length;
-
-                // ACF op-01 stores the segment byte size in a u16.
-                if (containerSize > ushort.MaxValue)
-                {
-                    throw new InvalidDataException(
-                        $"Encoded BMA container is {containerSize} bytes; " +
-                        "the ACF segment size field supports at most 65535 bytes. " +
-                        "Reduce the changed area in this group of frames.");
-                }
-
-                writer.Write((uint)containerSize);
-                writer.Write((ushort)frameCount);
-
-                int frameOffset = headerSize;
-                foreach (byte[] body in bodies)
-                {
-                    writer.Write((uint)frameOffset);
-                    frameOffset += body.Length;
-                }
-
-                foreach (byte[] body in bodies)
-                    writer.Write(body);
             }
 
             return output.ToArray();
+        }
+
+        private static void WriteContainer(
+            BinaryWriter writer,
+            IReadOnlyList<byte[]> bodies,
+            int startFrame,
+            int frameCount)
+        {
+            int headerSize = 6 + frameCount * 4;
+            int containerSize = headerSize;
+            for (int i = 0; i < frameCount; i++)
+                containerSize += bodies[startFrame + i].Length;
+
+            if (containerSize > ushort.MaxValue)
+            {
+                throw new InvalidDataException(
+                    $"Encoded BMA container is {containerSize} bytes; " +
+                    "the ACF segment size field supports at most 65535 bytes.");
+            }
+
+            writer.Write((uint)containerSize);
+            writer.Write((ushort)frameCount);
+
+            int frameOffset = headerSize;
+            for (int i = 0; i < frameCount; i++)
+            {
+                writer.Write((uint)frameOffset);
+                frameOffset += bodies[startFrame + i].Length;
+            }
+
+            for (int i = 0; i < frameCount; i++)
+                writer.Write(bodies[startFrame + i]);
         }
 
         private static IReadOnlyList<int> SingleFrameContainers(int frameCount)

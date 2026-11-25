@@ -603,8 +603,10 @@ namespace DarkSunRE.ViewModels
 
                 byte[] bma = BmaWriter.Write(framePixels, width, height, containerLayout);
                 BmaAnimation encoded = BmaReader.Read(bma);
-                bool acfPatched = containerLayout != null &&
-                    PatchAcfSegmentSizes(encoded.Containers.Select(container => container.Size).ToList());
+                var segments = encoded.Containers
+                    .Select((container, index) => new AcfSegmentInfo(index, container.FrameCount, container.Size))
+                    .ToList();
+                bool acfPatched = containerLayout != null && PatchAcfSegments(segments);
 
                 _animationData = bma;
                 if (_resourceInfo != null)
@@ -628,7 +630,7 @@ namespace DarkSunRE.ViewModels
                     : string.Empty;
                 string targetName = $"{_resourceInfo.Tag.Trim()}-{_resourceInfo.Number}";
                 string acfNote = acfPatched
-                    ? " ACF segment sizes were updated to match the new containers."
+                    ? " ACF segment table was rebuilt for the new containers."
                     : string.Empty;
                 _statusService?.ShowSuccess(
                     $"Imported {imported.Count} PNG frames into {targetName} (replacing the existing BMA chunk). " +
@@ -671,7 +673,7 @@ namespace DarkSunRE.ViewModels
         /// The engine seeks by these sizes; stale values stop playback after
         /// the first container or make it crash.
         /// </summary>
-        private bool PatchAcfSegmentSizes(IReadOnlyList<int> containerSizes)
+        private bool PatchAcfSegments(IReadOnlyList<AcfSegmentInfo> segments)
         {
             if (_project?.Files == null || _resourceInfo == null)
                 return false;
@@ -691,7 +693,7 @@ namespace DarkSunRE.ViewModels
             GffFile gff = GffFile.Create(container.Data);
             byte[] acfData = acfResource.ModifiedData
                              ?? gff.GetResourceData(acfResource.Tag, acfResource.Number);
-            byte[] patched = AcfSegmentPatcher.UpdateSegmentSizes(acfData, containerSizes);
+            byte[] patched = AcfSegmentPatcher.RebuildSegments(acfData, segments);
 
             acfResource.ModifiedData = patched;
             acfResource.IsModified = true;

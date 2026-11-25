@@ -58,6 +58,84 @@ namespace DSunTools.Common.Image
         }
 
         /// <summary>
+        /// Replace every op-01 registration with the supplied segment list.
+        /// This is used when a BMA container had to be split to stay within
+        /// the engine's 64 KB segment limit. The new registrations are
+        /// inserted at the position of the first old op-01 instruction, so
+        /// the pre-scan still sees them and the remaining script is kept.
+        /// </summary>
+        public static byte[] RebuildSegments(
+            byte[] acfData,
+            IReadOnlyList<AcfSegmentInfo> segments)
+        {
+            if (acfData == null) throw new ArgumentNullException(nameof(acfData));
+            if (segments == null) throw new ArgumentNullException(nameof(segments));
+            if (segments.Count > 64)
+            {
+                throw new InvalidDataException(
+                    $"BMA needs {segments.Count} stream segments, but the ACF segment table holds at most 64.");
+            }
+
+            using var output = new MemoryStream();
+            using var writer = new BinaryWriter(output);
+            int wordCount = acfData.Length / 2;
+            int position = 0;
+            bool inserted = false;
+
+            while (position < wordCount)
+            {
+                int instruction = ReadWord(acfData, position);
+                int opcode = instruction >> 8;
+                int totalWords = (instruction & 0xFF) / 2;
+                if (totalWords < 1 || position + totalWords > wordCount)
+                    break;
+
+                if (opcode == 0x01)
+                {
+                    if (!inserted)
+                    {
+                        WriteSegments(writer, segments);
+                        inserted = true;
+                    }
+
+                    position += totalWords;
+                    continue;
+                }
+
+                for (int i = 0; i < totalWords; i++)
+                    writer.Write((ushort)ReadWord(acfData, position + i));
+                position += totalWords;
+            }
+
+            if (!inserted)
+                throw new InvalidDataException("ACF has no op-01 stream segment registrations to replace.");
+
+            // Preserve an odd trailing byte if the chunk had one.
+            if ((acfData.Length & 1) != 0)
+                writer.Write(acfData[acfData.Length - 1]);
+
+            return output.ToArray();
+        }
+
+        private static void WriteSegments(BinaryWriter writer, IReadOnlyList<AcfSegmentInfo> segments)
+        {
+            foreach (AcfSegmentInfo segment in segments)
+            {
+                if (segment.Index < 0 || segment.Index > 0x100)
+                    throw new InvalidDataException($"ACF segment index {segment.Index} is out of range.");
+                if (segment.FrameCount < 0 || segment.FrameCount > ushort.MaxValue)
+                    throw new InvalidDataException($"ACF segment frame count {segment.FrameCount} is out of range.");
+                if (segment.ByteSize < 0 || segment.ByteSize > ushort.MaxValue)
+                    throw new InvalidDataException($"ACF segment size {segment.ByteSize} is out of range.");
+
+                writer.Write((ushort)((0x01 << 8) | (4 * 2)));
+                writer.Write((ushort)segment.Index);
+                writer.Write((ushort)segment.FrameCount);
+                writer.Write((ushort)segment.ByteSize);
+            }
+        }
+
+        /// <summary>
         /// Set the byte-size operand of every op-01 registration, in order.
         /// Returns a patched copy; the original bytes are not modified.
         /// </summary>

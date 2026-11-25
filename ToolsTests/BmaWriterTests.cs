@@ -46,6 +46,24 @@ namespace Dsun.Common.Tests
         }
 
         [Fact]
+        public void SplitsContainerThatExceedsAcfSizeLimit()
+        {
+            var random = new Random(1234);
+            byte[] frame0 = new byte[160 * 200];
+            byte[] frame1 = new byte[160 * 200];
+            random.NextBytes(frame0);
+            random.NextBytes(frame1);
+
+            byte[] bma = BmaWriter.Write(new[] { frame0, frame1 }, 160, 200, new[] { 2 });
+            BmaAnimation animation = BmaReader.Read(bma);
+
+            Assert.True(animation.Containers.Count >= 2);
+            Assert.All(animation.Containers, container => Assert.InRange(container.Size, 1, 65535));
+            Assert.Equal(frame0, animation.Frames[0].GetPixels());
+            Assert.Equal(frame1, animation.Frames[1].GetPixels());
+        }
+
+        [Fact]
         public void RejectsLayoutWithWrongFrameCount()
         {
             Assert.Throws<ArgumentException>(() =>

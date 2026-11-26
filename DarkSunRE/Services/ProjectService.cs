@@ -379,6 +379,8 @@ namespace DarkSunRE.Services
                 var resourceType = classification.IsKnown
                     ? classification.Type
                     : _resource_service.DetectResourceType(descriptor.Tag, resourceData);
+                string knownName = ResourceCatalog.GetKnownDisplayName(descriptor.Tag, descriptor.Number);
+                string knownDescription = ResourceCatalog.GetKnownDescription(descriptor.Tag, descriptor.Number);
 
                 resources.Add(new ResourceInfo
                 {
@@ -388,8 +390,8 @@ namespace DarkSunRE.Services
                     Size = descriptor.Size,
                     Type = resourceType,
                     Group = classification.Group,
-                    DisplayName = classification.DisplayName,
-                    Description = classification.Description
+                    DisplayName = knownName ?? classification.DisplayName,
+                    Description = knownDescription ?? classification.Description
                 });
             }
 

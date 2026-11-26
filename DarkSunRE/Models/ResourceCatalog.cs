@@ -301,6 +301,69 @@ namespace DarkSunRE.Models
                 : new ResourceGroupInfo(group, group.ToString(), 999, string.Empty);
         }
 
+        /// <summary>
+        /// Human-readable labels for well-known resources. The main menu is
+        /// especially non-obvious: its buttons contain no text strings; the
+        /// flaming labels are the bitmap glyphs in ICON 2048..2051.
+        /// </summary>
+        public static string GetKnownDisplayName(string tag, int number)
+        {
+            return NormalizeTag(tag) switch
+            {
+                "WIND" when number == 3000 => "Main menu window",
+                "WIND" when number == 10500 => "Game menu window (ESC)",
+                "WIND" when number == 16500 => "Preferences window",
+                "WIND" when number == 3009 => "Load/Save window",
+                "WIND" when number == 3011 => "Character creation window",
+                "WIND" when number == 13500 => "Inventory window",
+                "WIND" when number == 11500 => "Character sheet window",
+                "WIND" when number == 15503 => "Spell info window",
+                "BUTN" when number >= 2048 && number <= 2051 =>
+                    $"Main menu button: {MainMenuLabel(number)}",
+                "ICON" when number >= 2048 && number <= 2051 =>
+                    $"Menu label: {MainMenuLabel(number)}",
+                "ACCL" when number == 8100 => "Main menu hotkeys (S/C/L/E)",
+                "BMP " when number == 20028 => "Main menu burning arc",
+                "BMP " when number == 20029 => "Main menu stone panel",
+                _ => null
+            };
+        }
+
+        public static string GetKnownDescription(string tag, int number)
+        {
+            return NormalizeTag(tag) switch
+            {
+                "WIND" when number == 3000 =>
+                    "Initial menu. Items: ACCL 8100 + BUTN 2048, 2049, 2050, 2051. " +
+                    "The button captions are bitmap labels in ICON 2048..2051, not text strings.",
+                "BUTN" when number >= 2048 && number <= 2051 =>
+                    $"Initial-menu button '{MainMenuLabel(number)}'. Its icon_id points at ICON {number}; " +
+                    "the visible caption is baked into that bitmap.",
+                "ICON" when number >= 2048 && number <= 2051 =>
+                    $"Initial-menu caption '{MainMenuLabel(number)}' as a 4-frame bitmap; " +
+                    "edit these pixels to translate the main menu.",
+                "ACCL" when number == 8100 =>
+                    "Main-menu accelerator table: S/s Start, C/c Create, L/l Load, E/e Exit.",
+                "BMP " when number == 20028 =>
+                    "Burning arc furniture behind the initial menu.",
+                "BMP " when number == 20029 =>
+                    "Ornate stone panel behind the initial menu.",
+                _ => null
+            };
+        }
+
+        private static string MainMenuLabel(int buttonId)
+        {
+            return buttonId switch
+            {
+                2048 => "START GAME",
+                2049 => "CREATE CHARACTER",
+                2050 => "LOAD SAVED GAME",
+                2051 => "EXIT TO DOS",
+                _ => "menu button"
+            };
+        }
+
         public static IReadOnlyList<ResourceGroupInfo> AllGroups =>
             Groups.Values.OrderBy(group => group.Order).ToList();
 

@@ -944,24 +944,51 @@ namespace DarkSunRE.ViewModels
                         Name = $"{file.Name} ({file.Resources?.Count ?? 0} resources)",
                         ItemType = ProjectItemType.GffFile,
                         Item = file,
+                        Description = file.FullPath,
                         IsExpanded = false
                     };
 
-                    // Загружаем file
+                    // Resources are grouped by semantic family instead of a
+                    // flat list. Empty groups (and groups hidden by filters)
+                    // disappear in FilterNode.
                     if (file.Resources != null)
                     {
-                        foreach (var resource in file.Resources)
+                        foreach (var group in file.Resources
+                                     .GroupBy(resource => resource.Group)
+                                     .OrderBy(group => ResourceCatalog.GetGroup(group.Key).Order))
                         {
-                            var resourceNode = new ProjectNode
+                            ResourceGroupInfo groupInfo = ResourceCatalog.GetGroup(group.Key);
+                            var groupNode = new ProjectNode
                             {
-                                Name = $"{resource.Tag}-{resource.Number} ({resource.Type})",
-                                ItemType = ProjectItemType.Resource,
-                                Item = resource,
-                                Tag = resource.Tag,
-                                ResourceNumber = resource.Number
+                                Name = $"{groupInfo.DisplayName} ({group.Count()})",
+                                ItemType = ProjectItemType.Group,
+                                Group = group.Key,
+                                Description = groupInfo.Description,
+                                IsExpanded = false
                             };
 
-                            fileNode.Children.Add(resourceNode);
+                            foreach (var resource in group
+                                         .OrderBy(resource => resource.Tag)
+                                         .ThenBy(resource => resource.Number))
+                            {
+                                string kind = string.IsNullOrWhiteSpace(resource.DisplayName)
+                                    ? resource.Type.ToString()
+                                    : resource.DisplayName;
+                                var resourceNode = new ProjectNode
+                                {
+                                    Name = $"{resource.Tag}-{resource.Number} ({kind})",
+                                    ItemType = ProjectItemType.Resource,
+                                    Item = resource,
+                                    Tag = resource.Tag,
+                                    ResourceNumber = resource.Number,
+                                    Group = resource.Group,
+                                    Description = resource.Description
+                                };
+
+                                groupNode.Children.Add(resourceNode);
+                            }
+
+                            fileNode.Children.Add(groupNode);
                         }
                     }
 
@@ -997,8 +1024,10 @@ namespace DarkSunRE.ViewModels
 
         private ProjectNode FilterNode(ProjectNode node)
         {
-            // Для проекта и GFF файлов создаем копии с детьми
-            if (node.ItemType == ProjectItemType.Project || node.ItemType == ProjectItemType.GffFile)
+            // Для проекта, GFF файлов и групп создаем копии с детьми
+            if (node.ItemType == ProjectItemType.Project ||
+                node.ItemType == ProjectItemType.GffFile ||
+                node.ItemType == ProjectItemType.Group)
             {
                 var filteredNode = new ProjectNode
                 {
@@ -1007,7 +1036,9 @@ namespace DarkSunRE.ViewModels
                     Item = node.Item,
                     IsExpanded = node.IsExpanded,
                     Tag = node.Tag,
-                    ResourceNumber = node.ResourceNumber
+                    ResourceNumber = node.ResourceNumber,
+                    Group = node.Group,
+                    Description = node.Description
                 };
 
                 // Фильтруем дочерние элементы
@@ -1019,6 +1050,9 @@ namespace DarkSunRE.ViewModels
                         filteredNode.Children.Add(filteredChild);
                     }
                 }
+
+                if (node.ItemType == ProjectItemType.Group && filteredNode.Children.Count == 0)
+                    return null;
 
                 return filteredNode;
             }
@@ -1154,17 +1188,29 @@ namespace DarkSunRE.ViewModels
         {
             foreach (var projectNode in RootNodes)
             {
-                foreach (var fileNode in projectNode.Children)
-                {
-                    foreach (var resourceNode in fileNode.Children)
-                    {
-                        if (resourceNode.Tag == tag && resourceNode.ResourceNumber == number)
-                        {
-                            return resourceNode.Item as ResourceInfo;
-                        }
-                    }
-                }
+                ResourceInfo found = FindResourceInNode(projectNode, tag, number);
+                if (found != null)
+                    return found;
             }
+            return null;
+        }
+
+        private static ResourceInfo FindResourceInNode(ProjectNode node, string tag, int number)
+        {
+            if (node?.ItemType == ProjectItemType.Resource &&
+                node.Tag == tag &&
+                node.ResourceNumber == number)
+            {
+                return node.Item as ResourceInfo;
+            }
+
+            foreach (var child in node?.Children ?? Enumerable.Empty<ProjectNode>())
+            {
+                ResourceInfo found = FindResourceInNode(child, tag, number);
+                if (found != null)
+                    return found;
+            }
+
             return null;
         }
 

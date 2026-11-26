@@ -156,66 +156,20 @@ namespace DarkSunRE.Services
 
         public ResourceType DetectResourceType(string tag, byte[] data)
         {
+            ResourceTagInfo classification = ResourceCatalog.Classify(tag);
+            if (classification.IsKnown)
+                return classification.Type;
+
             if (data == null || data.Length == 0)
                 return ResourceType.Unknown;
 
-            // Определяем по тегу
-            var typeByTag = DetectByTag(tag);
-            if (typeByTag != ResourceType.Unknown)
-                return typeByTag;
-
-            // Определяем по сигнатуре данных
+            // Unknown tags only: fall back to a conservative signature check.
             return DetectBySignature(data);
         }
 
         ResourceType IResourceService.DetectResourceType(string tag, byte[] data)
         {
-            if (data == null || data.Length == 0)
-                return ResourceType.Unknown;
-
-            // Определяем по тегу
-            var typeByTag = DetectByTag(tag);
-            if (typeByTag != ResourceType.Unknown)
-                return typeByTag;
-
-            // Определяем по сигнатуре данных
-            return DetectBySignature(data);            
-        }
-        private ResourceType DetectByTag(string tag)
-        {
-            return tag switch
-            {
-                "BMP " or "TGA " or
-                "SPR " or "ICON" or
-                "BUTN" or "WALL" or
-                "PORT" or "CMAT" or
-                "TILE" or "CBMP" => ResourceType.Image,
-                "PAL " or "CPAL" => ResourceType.Palette,
-                "FNT " or "FONT"=> ResourceType.Font,
-                "TEXT" or "MSG " or
-                "MERR" or
-                "ETME" or "SPIN" or
-                "RNME" => ResourceType.Text,
-                "NAME" => ResourceType.Name,
-                "GPL " => ResourceType.Script,
-                "WAV " or "VOC " or
-                "BVOC" => ResourceType.Sound,
-                "ITM " => ResourceType.Item,
-                "CHR " => ResourceType.Character,
-                "RMAP" or "GMAP" => ResourceType.Map,
-                "ANM " or "BMA " => ResourceType.Animation,
-                "ACF " => ResourceType.AnimationControl,
-                "PSEQ" or "CSEQ" or
-                "LSEQ" or "GSEQ" or
-                "FSEQ" => ResourceType.Music,
-                "ETAB" => ResourceType.Item,
-                "MAS " or "IT1R" or
-                "EBOX" or "ACCL" or
-                "GPLX" or "GPLI" or
-                "GFFI" or "WIND" or
-                "ADV " or "APFM" => ResourceType.Unknown,
-                _ => ResourceType.Unknown
-            };
+            return DetectResourceType(tag, data);
         }
         private ResourceType DetectBySignature(byte[] data)
         {
@@ -443,8 +397,9 @@ namespace DarkSunRE.Services
 
         private DocumentViewModel CreateRawDataViewModel(ResourceInfo resourceInfo, byte[] data)
         {
-            // Реализация для неизвестных типов
-            return new RawDataViewModel();
+            var viewModel = new RawResourceViewModel();
+            viewModel.Initialize(resourceInfo, data);
+            return viewModel;
         }
         
         private DocumentViewModel CreateNameResourceViewModel(ResourceInfo resourceInfo, byte[] data)

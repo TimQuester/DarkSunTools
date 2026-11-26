@@ -207,6 +207,36 @@ namespace DarkSunRE
                     MessageBox.Show("Animation control scripts (ACF) are not interpreted. Open the matching BMA resource to view the frames.");
                     return;
                 }
+                else if (resource.Type == ResourceType.RawData ||
+                         resource.Type == ResourceType.Unknown ||
+                         resource.Type == ResourceType.Item ||
+                         resource.Type == ResourceType.Character ||
+                         resource.Type == ResourceType.Map ||
+                         resource.Type == ResourceType.Dialog)
+                {
+                    byte[] resourceBytes = resource.ModifiedData;
+
+                    if (resourceBytes == null && !string.IsNullOrWhiteSpace(project.ModifiedGamePath))
+                    {
+                        var modifiedPath = Path.Combine(project.ModifiedGamePath, container.Name);
+                        if (File.Exists(modifiedPath))
+                        {
+                            var gffBytes = File.ReadAllBytes(modifiedPath);
+                            var gff = _resourceService.ParseGffFile(gffBytes);
+                            resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
+                        }
+                    }
+
+                    if (resourceBytes == null)
+                    {
+                        var gff = _resourceService.ParseGffFile(container.Data);
+                        resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
+                    }
+
+                    var rawViewModel = new RawResourceViewModel();
+                    rawViewModel.Initialize(resource, resourceBytes);
+                    documentViewModel = rawViewModel;
+                }
                 else
                 {
                     string resourceName = $"{resource.Tag}-{resource.Number}";
@@ -253,6 +283,10 @@ namespace DarkSunRE
                 else if (documentViewModel is TextResourceViewModel textResourceViewModel)
                 {
                     view = new TextResourceView { DataContext = textResourceViewModel };
+                }
+                else if (documentViewModel is RawResourceViewModel rawResourceViewModel)
+                {
+                    view = new RawResourceView { DataContext = rawResourceViewModel };
                 }
                 else
                 {

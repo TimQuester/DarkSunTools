@@ -1,4 +1,4 @@
-﻿using DarkSunRE.ViewModels;
+using DarkSunRE.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -21,6 +21,8 @@ namespace DarkSunRE.Models
         public object Item { get; set; } // Project, GffFileInfo или ResourceInfo
         public string Tag { get; set; }
         public int ResourceNumber { get; set; }
+        public ResourceGroup Group { get; set; } = ResourceGroup.Unknown;
+        public string Description { get; set; }
         public ObservableCollection<ProjectNode> Children { get; set; } = new ObservableCollection<ProjectNode>();
 
         public bool IsExpanded
@@ -43,6 +45,7 @@ namespace DarkSunRE.Models
                 {
                     ProjectItemType.Project => "project",
                     ProjectItemType.GffFile => "file",
+                    ProjectItemType.Group => "group",
                     ProjectItemType.Resource => "resource",
                     _ => "default"
                 };

@@ -1,4 +1,4 @@
-﻿using DarkSunRE.Models;
+using DarkSunRE.Models;
 using DarkSunRE.Services;
 using System;
 using System.Collections.Generic;
@@ -375,7 +375,10 @@ namespace DarkSunRE.Services
             foreach (var descriptor in descriptors)
             {
                 var resourceData = gffFile.GetResourceData(descriptor.Tag, descriptor.Number);
-                var resourceType = _resource_service.DetectResourceType(descriptor.Tag, resourceData);
+                var classification = ResourceCatalog.Classify(descriptor.Tag);
+                var resourceType = classification.IsKnown
+                    ? classification.Type
+                    : _resource_service.DetectResourceType(descriptor.Tag, resourceData);
 
                 resources.Add(new ResourceInfo
                 {
@@ -384,7 +387,9 @@ namespace DarkSunRE.Services
                     Offset = descriptor.Offset,
                     Size = descriptor.Size,
                     Type = resourceType,
-                    Description = "test"
+                    Group = classification.Group,
+                    DisplayName = classification.DisplayName,
+                    Description = classification.Description
                 });
             }
 

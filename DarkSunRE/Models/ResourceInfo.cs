@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.AccessControl;
@@ -15,6 +15,8 @@ namespace DarkSunRE.Models
         public int Offset { get; set; }
         public int Size { get; set; }
         public ResourceType Type { get; set; }
+        public ResourceGroup Group { get; set; } = ResourceGroup.Unknown;
+        public string DisplayName { get; set; }
         public string Description { get; set; }
         public ImageSource Thumbnail { get; set; }
         public bool IsModified { get; set; }

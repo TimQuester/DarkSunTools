@@ -48,7 +48,8 @@ namespace DarkSunRE.Models
     /// Single source of truth for the GFF chunk catalog. The tag list and
     /// categorization follow the DS1/DS2 corpus and OpenDS's file-formats
     /// catalog; the tree groups are intentionally broader than the editor
-    /// types because many game-data chunks share the raw hex viewer.
+    /// types because many game-data chunks share the same metadata-only
+    /// placeholder view until a dedicated editor exists.
     /// </summary>
     public static class ResourceCatalog
     {

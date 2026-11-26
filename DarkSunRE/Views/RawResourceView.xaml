@@ -21,14 +21,9 @@
             </StackPanel>
         </Border>
 
-        <TextBox Text="{Binding HexDump, Mode=OneWay}"
-                 IsReadOnly="True"
-                 FontFamily="Consolas"
-                 FontSize="12"
-                 TextWrapping="NoWrap"
-                 AcceptsReturn="True"
-                 VerticalScrollBarVisibility="Auto"
-                 HorizontalScrollBarVisibility="Auto"
-                 Padding="6"/>
+        <TextBlock Text="{Binding Message}"
+                   Margin="16"
+                   Foreground="#666666"
+                   TextWrapping="Wrap"/>
     </DockPanel>
 </UserControl>

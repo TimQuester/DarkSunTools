@@ -301,33 +301,14 @@ namespace DarkSunRE
                     Content = view
                 };
 
-                // Подписываемся на события изменения свойств вьюмодели
+                // Keep the document tab title in sync with the view model.
                 documentViewModel.PropertyChanged += (o, args) =>
                 {
-                    if (documentViewModel is GplDocumentViewModel gplDocViewModel)
-                    {
-                        if (args.PropertyName == nameof(GplDocumentViewModel.SelectedString) && gplDocViewModel.SelectedString != null)
-                        {
-                            hvp.SetPosition(gplDocViewModel.SelectedString.StartPosition, gplDocViewModel.SelectedString.EndPosition);
-                        }
-
-                        if (args.PropertyName == nameof(GplDocumentViewModel.NewBytes))
-                        {
-                            hvp.LoadBytes(gplDocViewModel.OriginalBytes, gplDocViewModel.NewBytes);
-                        }
-                    }
-
                     if (args.PropertyName == nameof(DocumentViewModel.DisplayTitle))
                     {
                         layoutDocument.Title = documentViewModel.DisplayTitle;
                     }
                 };
-
-                // Загружаем данные в hex view для GPL документов
-                if (documentViewModel is GplDocumentViewModel gplDocViewModel2)
-                {
-                    hvp.LoadBytes(gplDocViewModel2.OriginalBytes, gplDocViewModel2.NewBytes);
-                }
 
                 layoutDocumentPane.Children.Add(layoutDocument);
                 layoutDocument.IsActive = true;

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -41,6 +41,9 @@ namespace DarkSunRE.ViewModels
 
         public string ToolTip { get; set; }
         public bool CanClose { get; set; }
+
+        /// <summary>Stable key used to activate an already open resource tab.</summary>
+        public string ResourceKey { get; set; }
         public bool IsModified
         {
             get => _isModified;

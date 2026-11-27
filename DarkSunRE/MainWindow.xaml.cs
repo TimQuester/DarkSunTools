@@ -117,6 +117,19 @@ namespace DarkSunRE
                 return;
             }
 
+            string resourceKey = $"{container.Name}:{resource.Tag}:{resource.Number}";
+            LayoutDocument alreadyOpen = layoutDocumentPane.Children
+                .OfType<LayoutDocument>()
+                .FirstOrDefault(document =>
+                    document.Content is DocumentViewModel viewModel &&
+                    string.Equals(viewModel.ResourceKey, resourceKey, StringComparison.Ordinal));
+            if (alreadyOpen != null)
+            {
+                alreadyOpen.IsSelected = true;
+                alreadyOpen.IsActive = true;
+                return;
+            }
+
             try
             {
                 // reuse existing opened document if present
@@ -290,6 +303,7 @@ namespace DarkSunRE
                 // file name, then the resource tag/number.
                 documentViewModel.Title = $"{container.Name}:{resource.Tag}-{resource.Number}";
                 documentViewModel.File = container.FullPath;
+                documentViewModel.ResourceKey = resourceKey;
 
                 // Создаем представление в зависимости от типа вьюмодели
                 UserControl view = null;

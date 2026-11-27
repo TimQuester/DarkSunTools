@@ -1,0 +1,53 @@
+<UserControl x:Class="DarkSunRE.Views.InterfaceResourceView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:converters="clr-namespace:DarkSunRE.Converters"
+             mc:Ignorable="d"
+             d:DesignHeight="450" d:DesignWidth="800">
+    <UserControl.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+    </UserControl.Resources>
+    <DockPanel Margin="6">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Margin="0,6,0,0">
+            <Button Content="Save" Command="{Binding SaveCommand}" Margin="4" Padding="12,4"/>
+            <Button Content="Export JSON" Command="{Binding ExportJsonCommand}" Margin="4" Padding="12,4"/>
+            <Button Content="Import JSON" Command="{Binding ImportJsonCommand}" Margin="4" Padding="12,4"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Top" Margin="2,0,0,6">
+            <TextBlock Text="{Binding Kind}" FontWeight="Bold"/>
+        </StackPanel>
+
+        <Grid>
+            <DataGrid ItemsSource="{Binding Items}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      HeadersVisibility="Column"
+                      Visibility="{Binding IsWindow, Converter={StaticResource BoolToVisibility}}">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Item" Binding="{Binding Tag}" IsReadOnly="True" Width="80"/>
+                    <DataGridTextColumn Header="Id" Binding="{Binding Id}" IsReadOnly="True" Width="90"/>
+                    <DataGridTextColumn Header="Original X" Binding="{Binding OriginalX}" IsReadOnly="True" Width="100"/>
+                    <DataGridTextColumn Header="Original Y" Binding="{Binding OriginalY}" IsReadOnly="True" Width="100"/>
+                    <DataGridTextColumn Header="New X" Binding="{Binding X, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
+                    <DataGridTextColumn Header="New Y" Binding="{Binding Y, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <DataGrid ItemsSource="{Binding Fields}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      HeadersVisibility="Column"
+                      Visibility="{Binding IsButton, Converter={StaticResource BoolToVisibility}}">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Field" Binding="{Binding Name}" IsReadOnly="True" Width="160"/>
+                    <DataGridTextColumn Header="Original (game)" Binding="{Binding OriginalValue}" IsReadOnly="True" Width="*"/>
+                    <DataGridTextColumn Header="New" Binding="{Binding Value, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
+    </DockPanel>
+</UserControl>

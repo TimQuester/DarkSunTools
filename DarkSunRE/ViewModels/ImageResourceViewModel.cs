@@ -321,18 +321,21 @@ namespace DarkSunRE.ViewModels
                         $"This resource has {_frames.Count} frame(s), but {matching.Count} PNG frame(s) were supplied.");
                 }
 
-                int width = _frames[0].Width;
-                int height = _frames[0].Height;
+                int oldWidth = _frames[0].Width;
+                int oldHeight = _frames[0].Height;
                 var imported = new List<AnimationPngCodec.ImportedFrame>(matching.Count);
                 foreach (PngFrameFile entry in matching)
+                    imported.Add(AnimationPngCodec.ImportFrame(entry.Path));
+
+                int width = imported[0].Width;
+                int height = imported[0].Height;
+                if (imported.Any(frame => frame.Width != width || frame.Height != height))
+                    throw new InvalidDataException("All imported PNG frames must have the same dimensions.");
+
+                if (_useBmaCodec && (width != oldWidth || height != oldHeight))
                 {
-                    AnimationPngCodec.ImportedFrame frame = AnimationPngCodec.ImportFrame(entry.Path);
-                    if (frame.Width != width || frame.Height != height)
-                    {
-                        throw new InvalidDataException(
-                            $"PNG {Path.GetFileName(entry.Path)} is {frame.Width}x{frame.Height}, expected {width}x{height}.");
-                    }
-                    imported.Add(frame);
+                    throw new InvalidDataException(
+                        $"BMA/CMAT frames must stay {oldWidth}x{oldHeight}; got {width}x{height}.");
                 }
 
                 var framePixels = new List<byte[]>(imported.Count);
@@ -359,6 +362,23 @@ namespace DarkSunRE.ViewModels
                     encoded = BitmapContainerWriter.Write(framePixels, width, height, alphaMasks);
                 }
 
+                ResourceFile container = _project?.Files?.FirstOrDefault(file =>
+                    file.Resources != null &&
+                    file.Resources.Any(resource =>
+                        resource.Tag == _resourceInfo.Tag && resource.Number == _resourceInfo.Number));
+                int resizedControls = 0;
+                if (container != null)
+                {
+                    resizedControls = ButtonSizeSyncService.ApplyIconSizeChange(
+                        _project,
+                        container,
+                        _resourceInfo,
+                        oldWidth,
+                        oldHeight,
+                        width,
+                        height);
+                }
+
                 _imageData = encoded;
                 _resourceInfo.ModifiedData = encoded;
                 _resourceInfo.IsModified = true;
@@ -371,9 +391,13 @@ namespace DarkSunRE.ViewModels
                         $"{nearestPixels} pixel(s) had no exact RGB match in the selected palette; nearest colors were used.");
                 }
 
+                string controlNote = resizedControls > 0
+                    ? $" Updated {resizedControls} WIND/BUTN record(s) for the new button size."
+                    : string.Empty;
                 _statusService?.ShowSuccess(
-                    $"Imported {imported.Count} PNG frame(s) into {_resourceInfo.Tag.Trim()}-{_resourceInfo.Number}. " +
-                    "Use Generate new file to write them into the GFF.");
+                    $"Imported {imported.Count} PNG frame(s) into {_resourceInfo.Tag.Trim()}-{_resourceInfo.Number}." +
+                    controlNote +
+                    " Use Generate new file to write them into the GFF.");
             }
             catch (Exception ex)
             {

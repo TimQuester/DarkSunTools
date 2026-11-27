@@ -903,6 +903,7 @@ namespace DarkSunRE.ViewModels
             try
             {
                 var gff = _resourceService.ParseGffFile(file.Data);
+                ResourceFolderImportResult folderImport = ResourceFolderImporter.Import(CurrentProject, file, gff);
                 var updatedBytes = file.Data;
 
                 if (file.Resources != null)
@@ -941,7 +942,19 @@ namespace DarkSunRE.ViewModels
                 var outputPath = Path.Combine(CurrentProject.ModifiedGamePath, file.Name);
                 File.WriteAllBytes(outputPath, updatedBytes);
 
-                _statusService.ShowSuccess($"Generated file: {outputPath}");
+                string folderNote = folderImport.Imported > 0
+                    ? $" Imported {folderImport.Imported} resource(s) from matching folders."
+                    : string.Empty;
+                if (folderImport.Errors.Count > 0)
+                {
+                    _statusService.ShowWarning(
+                        $"Generated {outputPath}.{folderNote} Some folder imports failed: " +
+                        string.Join("; ", folderImport.Errors.Take(5)));
+                }
+                else
+                {
+                    _statusService.ShowSuccess($"Generated file: {outputPath}.{folderNote}");
+                }
             }
             catch (Exception ex)
             {

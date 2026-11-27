@@ -18,10 +18,12 @@ namespace DarkSunRE
     public partial class MainWindow : Window
     {
         private readonly IResourceService _resourceService;
+        private readonly IStatusService _statusService;
 
-        public MainWindow(IResourceService resourceService)
+        public MainWindow(IResourceService resourceService, IStatusService statusService)
         {
             _resourceService = resourceService;
+            _statusService = statusService;
             InitializeComponent();
             SetupInputBindings();
 
@@ -230,6 +232,14 @@ namespace DarkSunRE
                     MessageBox.Show("Animation control scripts (ACF) are not interpreted. Open the matching BMA resource to view the frames.");
                     return;
                 }
+                else if (resource.Tag.Trim() == "WIND" || resource.Tag.Trim() == "BUTN")
+                {
+                    byte[] originalBytes = GetOriginalResourceBytes(container, resource);
+                    byte[] currentBytes = GetCurrentResourceBytes(project, container, resource, originalBytes);
+                    var interfaceViewModel = new InterfaceResourceViewModel(_statusService);
+                    interfaceViewModel.Initialize(project, container, resource, originalBytes, currentBytes);
+                    documentViewModel = interfaceViewModel;
+                }
                 else if (resource.Type == ResourceType.RawData ||
                          resource.Type == ResourceType.Unknown ||
                          resource.Type == ResourceType.Item ||
@@ -306,6 +316,10 @@ namespace DarkSunRE
                 else if (documentViewModel is TextResourceViewModel textResourceViewModel)
                 {
                     view = new TextResourceView { DataContext = textResourceViewModel };
+                }
+                else if (documentViewModel is InterfaceResourceViewModel interfaceResourceViewModel)
+                {
+                    view = new InterfaceResourceView { DataContext = interfaceResourceViewModel };
                 }
                 else if (documentViewModel is RawResourceViewModel rawResourceViewModel)
                 {

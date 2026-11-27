@@ -13,6 +13,7 @@ namespace DarkSunRE.ViewModels
     {
         private ResourceInfo _resourceInfo;
         private byte[] _originalBytes = Array.Empty<byte>();
+        private byte[] _currentBytes = Array.Empty<byte>();
         private List<GplTransliterationRule> _transliterationRules = new();
         private string _text = string.Empty;
         private string _validationError = string.Empty;
@@ -71,8 +72,23 @@ namespace DarkSunRE.ViewModels
 
         public void Initialize(ResourceInfo resourceInfo, byte[] data, IEnumerable<TransliterationRule>? rules)
         {
+            Initialize(resourceInfo, data, data, rules);
+        }
+
+        /// <summary>
+        /// The original read-only field always comes from the game's original
+        /// container. The editable field may come from a previously generated
+        /// modified container or from resource.ModifiedData.
+        /// </summary>
+        public void Initialize(
+            ResourceInfo resourceInfo,
+            byte[] originalData,
+            byte[] currentData,
+            IEnumerable<TransliterationRule>? rules)
+        {
             _resourceInfo = resourceInfo ?? throw new ArgumentNullException(nameof(resourceInfo));
-            _originalBytes = data == null ? Array.Empty<byte>() : (byte[])data.Clone();
+            _originalBytes = originalData == null ? Array.Empty<byte>() : (byte[])originalData.Clone();
+            _currentBytes = currentData == null ? (byte[])_originalBytes.Clone() : (byte[])currentData.Clone();
             _transliterationRules = rules?
                 .Where(rule => rule != null)
                 .Select(rule => new GplTransliterationRule(rule.From ?? string.Empty, rule.To ?? string.Empty))
@@ -82,7 +98,7 @@ namespace DarkSunRE.ViewModels
             File = resourceInfo.Tag;
             OriginalGameText = DecodeRaw(_originalBytes);
             OriginalText = DecodeForDisplay(_originalBytes);
-            _text = OriginalText;
+            _text = DecodeForDisplay(_currentBytes);
             IsModified = false;
             ValidationError = string.Empty;
             OnPropertyChanged(nameof(OriginalGameText));
@@ -103,10 +119,8 @@ namespace DarkSunRE.ViewModels
             string gameText = GplTransliteration.EncodeToGameCharset(Text, _transliterationRules);
             _resourceInfo.ModifiedData = Encoding.Latin1.GetBytes(gameText);
             _resourceInfo.IsModified = true;
-            _originalBytes = (byte[])_resourceInfo.ModifiedData.Clone();
-            OriginalText = Text;
+            _currentBytes = (byte[])_resourceInfo.ModifiedData.Clone();
             IsModified = false;
-            OnPropertyChanged(nameof(OriginalText));
             OnPropertyChanged(nameof(CanSave));
         }
 
@@ -116,7 +130,8 @@ namespace DarkSunRE.ViewModels
                 return;
 
             OriginalGameText = DecodeRaw(_originalBytes);
-            _text = OriginalText = DecodeForDisplay(_originalBytes);
+            OriginalText = DecodeForDisplay(_originalBytes);
+            _text = DecodeForDisplay(_currentBytes);
             IsModified = false;
             ValidationError = string.Empty;
             OnPropertyChanged(nameof(OriginalGameText));

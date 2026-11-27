@@ -370,7 +370,7 @@ namespace DarkSunRE.Services
         private DocumentViewModel CreateImageResourceViewModel(ResourceInfo resourceInfo, byte[] data)
         {
             // Реализация для изображений
-            var viewModel = new ImageResourceViewModel();
+            var viewModel = new ImageResourceViewModel(_statusService);
             // viewModel.ImageData = data;
             // viewModel.Title = $"{resourceInfo.Tag}-{resourceInfo.Number}";
             // viewModel.File = $"{resourceInfo.Tag}-{resourceInfo.Number}";

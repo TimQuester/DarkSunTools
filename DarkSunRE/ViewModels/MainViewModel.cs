@@ -1,4 +1,4 @@
-﻿using DarkSunRE.Commands;
+using DarkSunRE.Commands;
 using DarkSunRE.Models;
 using DarkSunRE.Services;
 using System.Collections.ObjectModel;
@@ -18,6 +18,7 @@ namespace DarkSunRE.ViewModels
         private readonly IDialogService _dialogService;
         private readonly IStatusService _statusService;
         private readonly IFileService _fileService;
+        private readonly RecentProjectsService _recentProjectsService;
 
         private Project _currentProject;
         private CancellationTokenSource _operationCts;
@@ -35,6 +36,8 @@ namespace DarkSunRE.ViewModels
         public ICommand SettingsCommand { get; }
         public ICommand SaveJsonGplCommand { get; }
         public ICommand LoadJsonGplCommand { get; }
+        public ICommand OpenRecentProjectCommand { get; }
+        public ObservableCollection<RecentProjectEntry> RecentProjects { get; }
 
         public bool IsModified;
 
@@ -45,6 +48,13 @@ namespace DarkSunRE.ViewModels
             _statusService = statusService;
             _fileService = fileService;
             ProjectTree = projectTreeViewModel;
+            _recentProjectsService = new RecentProjectsService();
+            RecentProjects = new ObservableCollection<RecentProjectEntry>(_recentProjectsService.Load());
+            OpenRecentProjectCommand = new RelayCommand<RecentProjectEntry>(entry =>
+            {
+                if (entry != null)
+                    _ = OpenProjectAsync(entry.FullPath);
+            });
 
             // Подписка на события
             _projectService.ProjectChanged += OnProjectChanged;
@@ -247,7 +257,13 @@ namespace DarkSunRE.ViewModels
         private async Task OpenProjectAsync()
         {
             var filePath = _dialogService.ShowOpenFileDialog("Project files|*.dsproj");
-            if (string.IsNullOrEmpty(filePath))
+            if (!string.IsNullOrEmpty(filePath))
+                await OpenProjectAsync(filePath);
+        }
+
+        private async Task OpenProjectAsync(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
                 return;
 
             _operationCts?.Cancel();
@@ -275,6 +291,7 @@ namespace DarkSunRE.ViewModels
                 CurrentProject = project;
                 IsModified = false;
                 OnPropertyChanged(nameof(IsModified));
+                ReplaceRecentProjects(_recentProjectsService.Add(filePath));
                 _statusService.ShowSuccess($"Project '{project.ProjectName ?? Path.GetFileNameWithoutExtension(filePath)}' opened.");
             }
             catch (OperationCanceledException)
@@ -344,6 +361,13 @@ namespace DarkSunRE.ViewModels
             // Обработка открытия ресурса
             //OpenResourceEditor(e.Resource);
         }
+        private void ReplaceRecentProjects(IReadOnlyList<RecentProjectEntry> entries)
+        {
+            RecentProjects.Clear();
+            foreach (RecentProjectEntry entry in entries)
+                RecentProjects.Add(entry);
+        }
+
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

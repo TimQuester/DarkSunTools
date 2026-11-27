@@ -82,7 +82,12 @@ namespace DarkSunRE.ViewModels
             SaveCommand = new RelayCommand(Save);
         }
 
-        public void Initialize(NameResource nameResource, string fileName, ResourceInfo resourceInfo = null, IEnumerable<TransliterationRule>? rules = null)
+        public void Initialize(
+            NameResource nameResource,
+            string fileName,
+            ResourceInfo resourceInfo = null,
+            IEnumerable<TransliterationRule>? rules = null,
+            NameResource originalResource = null)
         {
             NameResource = nameResource;
             _resourceInfo = resourceInfo;
@@ -90,15 +95,22 @@ namespace DarkSunRE.ViewModels
                 .Where(rule => rule != null)
                 .Select(rule => new DSunTools.Common.Gpl.GplTransliterationRule(rule.From ?? string.Empty, rule.To ?? string.Empty))
                 .ToList() ?? new List<DSunTools.Common.Gpl.GplTransliterationRule>();
-            foreach (NameEntry entry in Entries)
+
+            List<NameEntry> originalEntries = originalResource?.Entries ?? new List<NameEntry>();
+            for (int i = 0; i < Entries.Count; i++)
             {
-                if (string.IsNullOrEmpty(entry.OriginalMainName))
-                    entry.OriginalMainName = entry.MainName;
-                if (string.IsNullOrEmpty(entry.OriginalPath))
-                    entry.OriginalPath = entry.Path;
+                NameEntry entry = Entries[i];
+                NameEntry original = i < originalEntries.Count ? originalEntries[i] : null;
+
+                // The read-only original column must always come from the
+                // original game container, even if a generated file is open.
+                entry.OriginalMainName = original?.OriginalMainName ?? original?.MainName
+                    ?? entry.OriginalMainName ?? entry.MainName;
+                entry.OriginalPath = original?.OriginalPath ?? original?.Path
+                    ?? entry.OriginalPath ?? entry.Path;
 
                 entry.MainName = DSunTools.Common.Gpl.GplTransliteration.DecodeToDisplay(
-                    entry.OriginalMainName, _transliterationRules);
+                    entry.MainName ?? string.Empty, _transliterationRules);
             }
 
             File = fileName;

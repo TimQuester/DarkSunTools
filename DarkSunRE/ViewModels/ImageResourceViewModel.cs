@@ -3,12 +3,15 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using Microsoft.Win32;
+using System.Text.RegularExpressions;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using DarkSunRE.Commands;
 using DarkSunRE.Models;
+using DarkSunRE.Services;
 using DSunTools.Common.Gff;
 using DSunTools.Common.Image;
 
@@ -36,9 +39,13 @@ namespace DarkSunRE.ViewModels
         private readonly ICommand _zoomInCommand;
         private readonly ICommand _zoomOutCommand;
         private readonly ICommand _resetZoomCommand;
+        private readonly ICommand _exportPngCommand;
+        private readonly ICommand _importPngCommand;
+        private readonly IStatusService _statusService;
 
-        public ImageResourceViewModel()
+        public ImageResourceViewModel(IStatusService statusService = null)
         {
+            _statusService = statusService;
             Title = "Image";
             ToolTip = "Image Resource";
             CanClose = true;
@@ -50,6 +57,8 @@ namespace DarkSunRE.ViewModels
             _zoomInCommand = new RelayCommand(ZoomIn);
             _zoomOutCommand = new RelayCommand(ZoomOut);
             _resetZoomCommand = new RelayCommand(ResetZoom);
+            _exportPngCommand = new RelayCommand(ExportPngFrames);
+            _importPngCommand = new RelayCommand(ImportPngFrames);
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
             _timer.Tick += (_, __) =>
@@ -174,6 +183,8 @@ namespace DarkSunRE.ViewModels
         public ICommand ZoomInCommand => _zoomInCommand;
         public ICommand ZoomOutCommand => _zoomOutCommand;
         public ICommand ResetZoomCommand => _resetZoomCommand;
+        public ICommand ExportPngCommand => _exportPngCommand;
+        public ICommand ImportPngCommand => _importPngCommand;
 
         public void Initialize(Project project, ResourceInfo resourceInfo, byte[] imageData)
         {
@@ -220,6 +231,177 @@ namespace DarkSunRE.ViewModels
         {
             if (FrameCount == 0) return;
             CurrentFrameIndex = CurrentFrameIndex == LastFrameIndex ? 0 : CurrentFrameIndex + 1;
+        }
+
+        private void ExportPngFrames()
+        {
+            if (_resourceInfo == null || _frames == null || _frames.Count == 0)
+            {
+                _statusService?.ShowError("There are no image frames to export.", null);
+                return;
+            }
+
+            Palette palette = _selectedPalette?.Palette;
+            if (palette == null)
+            {
+                _statusService?.ShowError("Select a palette before exporting PNG frames.", null);
+                return;
+            }
+
+            var dialog = new OpenFolderDialog { Title = "Select folder for image PNG frames" };
+            if (dialog.ShowDialog() != true)
+                return;
+
+            try
+            {
+                string baseName = GetFrameBaseName();
+                for (int i = 0; i < _frames.Count; i++)
+                {
+                    ImageFrame frame = _frames[i];
+                    string path = Path.Combine(dialog.FolderName, $"{baseName}_{i:D3}.png");
+                    AnimationPngCodec.ExportFrame(path, frame.GetPixels(), frame.Width, frame.Height, palette);
+                }
+
+                _statusService?.ShowSuccess($"Exported {_frames.Count} PNG frame(s) to {dialog.FolderName}");
+            }
+            catch (Exception ex)
+            {
+                _statusService?.ShowError($"Failed to export image frames: {ex.Message}", ex);
+            }
+        }
+
+        private void ImportPngFrames()
+        {
+            if (_resourceInfo == null || _frames == null || _frames.Count == 0)
+            {
+                _statusService?.ShowError("There are no image frames to replace.", null);
+                return;
+            }
+
+            Palette targetPalette = _selectedPalette?.Palette;
+            if (targetPalette == null)
+            {
+                _statusService?.ShowError("Select a palette before importing PNG frames.", null);
+                return;
+            }
+
+            var dialog = new OpenFolderDialog { Title = "Select folder with image PNG frames" };
+            if (dialog.ShowDialog() != true)
+                return;
+
+            try
+            {
+                string targetBase = GetFrameBaseName();
+                var entries = Directory.GetFiles(dialog.FolderName, "*.png")
+                    .Select(ParseFrameFile)
+                    .OfType<PngFrameFile>()
+                    .ToList();
+                if (entries.Count == 0)
+                    throw new InvalidDataException("No PNG frames with a numeric suffix were found (expected name_000.png).");
+
+                var matching = entries
+                    .Where(entry => string.Equals(entry.BaseName, targetBase, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(entry => entry.Number)
+                    .ToList();
+                if (matching.Count == 0)
+                    matching = entries.OrderBy(entry => entry.Number).ToList();
+
+                if (matching.GroupBy(entry => entry.Number).Any(group => group.Count() > 1))
+                    throw new InvalidDataException($"The folder contains duplicate frame numbers for {targetBase}.");
+                if (matching.Count != _frames.Count)
+                {
+                    throw new InvalidDataException(
+                        $"This resource has {_frames.Count} frame(s), but {matching.Count} PNG frame(s) were supplied.");
+                }
+
+                int width = _frames[0].Width;
+                int height = _frames[0].Height;
+                var imported = new List<AnimationPngCodec.ImportedFrame>(matching.Count);
+                foreach (PngFrameFile entry in matching)
+                {
+                    AnimationPngCodec.ImportedFrame frame = AnimationPngCodec.ImportFrame(entry.Path);
+                    if (frame.Width != width || frame.Height != height)
+                    {
+                        throw new InvalidDataException(
+                            $"PNG {Path.GetFileName(entry.Path)} is {frame.Width}x{frame.Height}, expected {width}x{height}.");
+                    }
+                    imported.Add(frame);
+                }
+
+                var framePixels = new List<byte[]>(imported.Count);
+                int nearestPixels = 0;
+                foreach (AnimationPngCodec.ImportedFrame frame in imported)
+                {
+                    AnimationPngCodec.PaletteRemapResult remap =
+                        AnimationPngCodec.RemapToPalette(frame, targetPalette);
+                    framePixels.Add(remap.Pixels);
+                    nearestPixels += remap.NearestPixels;
+                }
+
+                byte[] encoded;
+                if (_useBmaCodec && _imageData != null)
+                {
+                    BmaAnimation current = BmaReader.Read(_imageData);
+                    List<int> layout = current.Containers.Select(container => container.FrameCount).ToList();
+                    encoded = BmaWriter.Write(framePixels, width, height, layout);
+                }
+                else
+                {
+                    encoded = BitmapContainerWriter.Write(framePixels, width, height);
+                }
+
+                _imageData = encoded;
+                _resourceInfo.ModifiedData = encoded;
+                _resourceInfo.IsModified = true;
+                LoadFrames();
+                IsModified = true;
+
+                if (nearestPixels > 0)
+                {
+                    _statusService?.ShowWarning(
+                        $"{nearestPixels} pixel(s) had no exact RGB match in the selected palette; nearest colors were used.");
+                }
+
+                _statusService?.ShowSuccess(
+                    $"Imported {imported.Count} PNG frame(s) into {_resourceInfo.Tag.Trim()}-{_resourceInfo.Number}. " +
+                    "Use Generate new file to write them into the GFF.");
+            }
+            catch (Exception ex)
+            {
+                _statusService?.ShowError($"Failed to import image frames: {ex.Message}", ex);
+            }
+        }
+
+        private sealed class PngFrameFile
+        {
+            public string Path { get; init; }
+            public string BaseName { get; init; }
+            public int Number { get; init; }
+        }
+
+        private static PngFrameFile? ParseFrameFile(string path)
+        {
+            string name = Path.GetFileNameWithoutExtension(path);
+            Match match = Regex.Match(name, @"^(.*)_(\d+)$");
+            if (!match.Success || !int.TryParse(match.Groups[2].Value, out int number))
+                return null;
+
+            return new PngFrameFile
+            {
+                Path = path,
+                BaseName = match.Groups[1].Value,
+                Number = number
+            };
+        }
+
+        private string GetFrameBaseName()
+        {
+            string raw = _resourceInfo == null
+                ? "image"
+                : $"{_resourceInfo.Tag.Trim()}-{_resourceInfo.Number}";
+            foreach (char invalid in Path.GetInvalidFileNameChars())
+                raw = raw.Replace(invalid, '_');
+            return string.IsNullOrWhiteSpace(raw) ? "image" : raw;
         }
 
         private static bool UsesBmaFrameCodec(Project project, ResourceInfo resourceInfo)

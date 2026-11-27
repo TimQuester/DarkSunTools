@@ -2,6 +2,7 @@ using DarkSunRE.Models;
 using DarkSunRE.ViewModels;
 using DarkSunRE.Views;
 using Microsoft.Win32;
+using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -42,6 +43,61 @@ namespace DarkSunRE
                 vm.ProjectTree.ResourceOpened += ProjectTree_ResourceOpened;
             }
             UpdateActiveGplDocument();
+        }
+
+        private void FilesViewMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (filesAnchorable == null)
+                return;
+
+            if (filesAnchorable.IsVisible)
+            {
+                filesAnchorable.Hide();
+                FilesViewMenuItem.IsChecked = false;
+            }
+            else
+            {
+                filesAnchorable.Show();
+                filesAnchorable.IsActive = true;
+                FilesViewMenuItem.IsChecked = true;
+            }
+        }
+
+        private void FilesAnchorable_Closing(object sender, CancelEventArgs e)
+        {
+            // The X button hides the panel instead of removing it from the
+            // layout, so View -> Files panel can always bring it back.
+            e.Cancel = true;
+            filesAnchorable.Hide();
+            FilesViewMenuItem.IsChecked = false;
+        }
+
+        private byte[] GetOriginalResourceBytes(ResourceFile container, ResourceInfo resource)
+        {
+            var originalGff = _resourceService.ParseGffFile(container.Data);
+            return _resourceService.GetResourceData(originalGff, resource.Tag, resource.Number);
+        }
+
+        private byte[] GetCurrentResourceBytes(
+            Project project,
+            ResourceFile container,
+            ResourceInfo resource,
+            byte[] originalBytes)
+        {
+            if (resource.ModifiedData != null)
+                return resource.ModifiedData;
+
+            if (!string.IsNullOrWhiteSpace(project.ModifiedGamePath))
+            {
+                string modifiedPath = System.IO.Path.Combine(project.ModifiedGamePath, container.Name);
+                if (File.Exists(modifiedPath))
+                {
+                    var modifiedGff = _resourceService.ParseGffFile(File.ReadAllBytes(modifiedPath));
+                    return _resourceService.GetResourceData(modifiedGff, resource.Tag, resource.Number);
+                }
+            }
+
+            return originalBytes;
         }
 
         private void ProjectTree_ResourceOpened(object? sender, DarkSunRE.ViewModels.ResourceEventArgs e)
@@ -116,27 +172,10 @@ namespace DarkSunRE
                 }
                 else if (resource.Type == ResourceType.Text)
                 {
-                    byte[] resourceBytes = resource.ModifiedData;
-
-                    if (resourceBytes == null && !string.IsNullOrWhiteSpace(project.ModifiedGamePath))
-                    {
-                        var modifiedPath = Path.Combine(project.ModifiedGamePath, container.Name);
-                        if (File.Exists(modifiedPath))
-                        {
-                            var gffBytes = File.ReadAllBytes(modifiedPath);
-                            var gff = _resourceService.ParseGffFile(gffBytes);
-                            resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
-                        }
-                    }
-
-                    if (resourceBytes == null)
-                    {
-                        var gff = _resourceService.ParseGffFile(container.Data);
-                        resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
-                    }
-
-                    var textViewModel = (TextResourceViewModel)_resourceService.CreateEditorViewModel(resource, resourceBytes);
-                    textViewModel.Initialize(resource, resourceBytes, project.TransliterationRules);
+                    byte[] originalBytes = GetOriginalResourceBytes(container, resource);
+                    byte[] currentBytes = GetCurrentResourceBytes(project, container, resource, originalBytes);
+                    var textViewModel = (TextResourceViewModel)_resourceService.CreateEditorViewModel(resource, currentBytes);
+                    textViewModel.Initialize(resource, originalBytes, currentBytes, project.TransliterationRules);
                     documentViewModel = textViewModel;
                 }
                 else if (resource.Type == ResourceType.Animation)
@@ -168,36 +207,20 @@ namespace DarkSunRE
                 }
                 else if (resource.Type == ResourceType.Name)
                 {
-                    // Для NAME ресурсов создаем NameResourceViewModel
-                    byte[] resourceBytes = resource.ModifiedData;
+                    byte[] originalBytes = GetOriginalResourceBytes(container, resource);
+                    byte[] currentBytes = GetCurrentResourceBytes(project, container, resource, originalBytes);
+                    var originalName = _resourceService.DecodeResource(resource, originalBytes) as NameResource;
+                    var currentName = _resourceService.DecodeResource(resource, currentBytes) as NameResource;
 
-                    if (resourceBytes == null && !string.IsNullOrWhiteSpace(project.ModifiedGamePath))
-                    {
-                        var modifiedPath = Path.Combine(project.ModifiedGamePath, container.Name);
-                        if (File.Exists(modifiedPath))
-                        {
-                            var gffBytes = File.ReadAllBytes(modifiedPath);
-                            var gff = _resourceService.ParseGffFile(gffBytes);
-                            resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
-                        }
-                    }
-                    
-                    if (resourceBytes == null)
-                    {
-                        var gff = _resourceService.ParseGffFile(container.Data);
-                        resourceBytes = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
-                    }
-                    
-                    documentViewModel = _resourceService.CreateEditorViewModel(resource, resourceBytes);
-                    
-                    // Для NAME ресурсов инициализируем вьюмодель с проектом и информацией о ресурсе
+                    documentViewModel = _resourceService.CreateEditorViewModel(resource, currentBytes);
                     if (documentViewModel is NameResourceViewModel nameResourceViewModel)
                     {
                         nameResourceViewModel.Initialize(
-                            _resourceService.DecodeResource(resource, resourceBytes) as NameResource,
+                            currentName,
                             $"{resource.Tag}-{resource.Number}",
                             resource,
-                            project.TransliterationRules);
+                            project.TransliterationRules,
+                            originalName);
                     }
                 }
                 else if (resource.Type == ResourceType.AnimationControl)

@@ -876,6 +876,30 @@ namespace DarkSunRE.ViewModels
                 return;
             }
 
+            if (!string.IsNullOrWhiteSpace(CurrentProject.OriginalGamePath))
+            {
+                bool sameFolder = false;
+                try
+                {
+                    sameFolder = string.Equals(
+                        Path.GetFullPath(CurrentProject.OriginalGamePath),
+                        Path.GetFullPath(CurrentProject.ModifiedGamePath),
+                        StringComparison.OrdinalIgnoreCase);
+                }
+                catch
+                {
+                    // Invalid paths will be reported by File.WriteAllBytes.
+                }
+
+                if (sameFolder)
+                {
+                    _statusService.ShowError(
+                        "Modified Game Path points at the original game folder. " +
+                        "Choose a separate output folder so generation cannot overwrite original resources.");
+                    return;
+                }
+            }
+
             try
             {
                 var gff = _resourceService.ParseGffFile(file.Data);
@@ -895,6 +919,15 @@ namespace DarkSunRE.ViewModels
                             doc.TransliterationRules = CurrentProject.TransliterationRules ?? new List<TransliterationRule>();
                             doc.ApplyStringChanges();
                             replacement = doc.newBytes;
+                        }
+
+                        if (resource.Type == ResourceType.Font)
+                        {
+                            // Always apply project glyph overrides at generation
+                            // time, even if the font editor was never opened.
+                            byte[] originalFont = _resourceService.GetResourceData(gff, resource.Tag, resource.Number);
+                            byte[] baseFont = replacement ?? originalFont;
+                            replacement = FontGenerationService.BuildWithOverrides(CurrentProject, baseFont);
                         }
 
                         if (replacement != null)

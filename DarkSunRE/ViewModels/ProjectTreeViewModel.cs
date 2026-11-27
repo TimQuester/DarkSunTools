@@ -50,6 +50,10 @@ namespace DarkSunRE.ViewModels
         public ICommand LoadAllTextJsonCommand { get; }
         public ICommand SaveFileTextJsonCommand { get; }
         public ICommand LoadFileTextJsonCommand { get; }
+        public ICommand SaveFileUiJsonCommand { get; }
+        public ICommand LoadFileUiJsonCommand { get; }
+        public ICommand SaveAllUiJsonCommand { get; }
+        public ICommand LoadAllUiJsonCommand { get; }
         public ICommand ToggleFilterCommand { get; }
         public ICommand SelectAllFiltersCommand { get; }
         public ICommand DeselectAllFiltersCommand { get; }
@@ -75,6 +79,10 @@ namespace DarkSunRE.ViewModels
             LoadAllTextJsonCommand = new RelayCommand<ProjectNode>(LoadAllTextJson);
             SaveFileTextJsonCommand = new RelayCommand<ProjectNode>(SaveFileTextJson);
             LoadFileTextJsonCommand = new RelayCommand<ProjectNode>(LoadFileTextJson);
+            SaveFileUiJsonCommand = new RelayCommand<ProjectNode>(SaveFileUiJson);
+            LoadFileUiJsonCommand = new RelayCommand<ProjectNode>(LoadFileUiJson);
+            SaveAllUiJsonCommand = new RelayCommand<ProjectNode>(SaveAllUiJson);
+            LoadAllUiJsonCommand = new RelayCommand<ProjectNode>(LoadAllUiJson);
             ToggleFilterCommand = new RelayCommand<string>(ToggleFilter);
             SelectAllFiltersCommand = new RelayCommand(SelectAllFilters);
             DeselectAllFiltersCommand = new RelayCommand(DeselectAllFilters);
@@ -564,6 +572,137 @@ namespace DarkSunRE.ViewModels
             {
                 _statusService.ShowError($"Failed to import text resources from {fileName}: {ex.Message}", ex);
             }
+        }
+
+        private void SaveFileUiJson(ProjectNode node)
+        {
+            if (CurrentProject == null || string.IsNullOrWhiteSpace(CurrentProject.JsonFolderPath))
+            {
+                _statusService.ShowError("JSON folder path is not configured.");
+                return;
+            }
+
+            if (node?.Item is not ResourceFile file || file.Data == null)
+            {
+                _statusService.ShowError("Selected file is not loaded.");
+                return;
+            }
+
+            try
+            {
+                InterfaceJsonStore.Export(CurrentProject, file);
+                _statusService.ShowSuccess(
+                    $"UI JSON saved: {InterfaceJsonStore.GetPath(CurrentProject, file)}");
+            }
+            catch (Exception ex)
+            {
+                _statusService.ShowError($"Failed to export UI JSON: {ex.Message}", ex);
+            }
+        }
+
+        private void LoadFileUiJson(ProjectNode node)
+        {
+            if (CurrentProject == null || string.IsNullOrWhiteSpace(CurrentProject.JsonFolderPath))
+            {
+                _statusService.ShowError("JSON folder path is not configured.");
+                return;
+            }
+
+            if (node?.Item is not ResourceFile file || file.Data == null)
+            {
+                _statusService.ShowError("Selected file is not loaded.");
+                return;
+            }
+
+            string path = InterfaceJsonStore.GetPath(CurrentProject, file);
+            if (!File.Exists(path))
+            {
+                _statusService.ShowError($"UI JSON not found: {path}");
+                return;
+            }
+
+            try
+            {
+                int applied = InterfaceJsonStore.Apply(CurrentProject, file, path);
+                file.IsModified = true;
+                _statusService.ShowSuccess($"UI JSON imported: {applied} record(s) from {path}");
+            }
+            catch (Exception ex)
+            {
+                _statusService.ShowError($"Failed to import UI JSON: {ex.Message}", ex);
+            }
+        }
+
+        private void SaveAllUiJson(ProjectNode node)
+        {
+            if (CurrentProject == null || string.IsNullOrWhiteSpace(CurrentProject.JsonFolderPath))
+            {
+                _statusService.ShowError("JSON folder path is not configured.");
+                return;
+            }
+
+            int saved = 0;
+            var errors = new List<string>();
+            foreach (ResourceFile file in CurrentProject.Files)
+            {
+                if (file?.Data == null || file.Resources == null ||
+                    !file.Resources.Any(resource =>
+                        resource.Tag.Trim() == "WIND" || resource.Tag.Trim() == "BUTN"))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    InterfaceJsonStore.Export(CurrentProject, file);
+                    saved++;
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"{file.Name}: {ex.Message}");
+                }
+            }
+
+            if (errors.Count == 0)
+                _statusService.ShowSuccess($"Saved UI JSON for {saved} file(s).");
+            else
+                _statusService.ShowWarning($"Saved {saved} file(s); errors: {FormatResourceErrors(errors)}");
+        }
+
+        private void LoadAllUiJson(ProjectNode node)
+        {
+            if (CurrentProject == null || string.IsNullOrWhiteSpace(CurrentProject.JsonFolderPath))
+            {
+                _statusService.ShowError("JSON folder path is not configured.");
+                return;
+            }
+
+            int applied = 0;
+            var errors = new List<string>();
+            foreach (ResourceFile file in CurrentProject.Files)
+            {
+                if (file?.Data == null)
+                    continue;
+
+                string path = InterfaceJsonStore.GetPath(CurrentProject, file);
+                if (!File.Exists(path))
+                    continue;
+
+                try
+                {
+                    applied += InterfaceJsonStore.Apply(CurrentProject, file, path);
+                    file.IsModified = true;
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"{file.Name}: {ex.Message}");
+                }
+            }
+
+            if (errors.Count == 0)
+                _statusService.ShowSuccess($"Imported {applied} UI record(s).");
+            else
+                _statusService.ShowWarning($"Imported {applied} record(s); errors: {FormatResourceErrors(errors)}");
         }
 
         private static (string Tag, int Number) ParseResourceId(string resourceId)

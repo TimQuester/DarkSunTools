@@ -38,18 +38,32 @@ namespace DarkSunRE.Services
             if (project == null || file?.Resources == null)
                 return result;
 
+            string combinedUiJson = InterfaceJsonStore.GetPath(project, file);
+            if (!string.IsNullOrWhiteSpace(combinedUiJson) && File.Exists(combinedUiJson))
+            {
+                try
+                {
+                    result.Imported += InterfaceJsonStore.Apply(project, file, combinedUiJson);
+                }
+                catch (Exception ex)
+                {
+                    result.Errors.Add($"{Path.GetFileName(combinedUiJson)}: {ex.Message}");
+                }
+            }
+
             foreach (string folder in GetFolders(project, file.Name))
             {
-                string uiJson = Path.Combine(folder, InterfaceJsonStore.FileName);
-                if (File.Exists(uiJson))
+                // Accept the old folder-based ui.json files as a migration aid.
+                string legacyUiJson = Path.Combine(folder, InterfaceJsonStore.LegacyFileName);
+                if (File.Exists(legacyUiJson))
                 {
                     try
                     {
-                        result.Imported += InterfaceJsonStore.Apply(project, file, uiJson);
+                        result.Imported += InterfaceJsonStore.Apply(project, file, legacyUiJson);
                     }
                     catch (Exception ex)
                     {
-                        result.Errors.Add($"{InterfaceJsonStore.FileName}: {ex.Message}");
+                        result.Errors.Add($"{InterfaceJsonStore.LegacyFileName}: {ex.Message}");
                     }
                 }
 

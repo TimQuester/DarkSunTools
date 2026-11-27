@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Windows.Input;
 
 namespace DarkSunRE.ViewModels
@@ -95,8 +94,6 @@ namespace DarkSunRE.ViewModels
             Items = new ObservableCollection<InterfaceItemViewModel>();
             Fields = new ObservableCollection<InterfaceFieldViewModel>();
             SaveCommand = new RelayCommand(Save);
-            ExportJsonCommand = new RelayCommand(ExportJson);
-            ImportJsonCommand = new RelayCommand(ImportJson);
         }
 
         public bool IsWindow { get; private set; }
@@ -105,8 +102,6 @@ namespace DarkSunRE.ViewModels
         public ObservableCollection<InterfaceItemViewModel> Items { get; }
         public ObservableCollection<InterfaceFieldViewModel> Fields { get; }
         public ICommand SaveCommand { get; }
-        public ICommand ExportJsonCommand { get; }
-        public ICommand ImportJsonCommand { get; }
 
         public void Initialize(
             Project project,
@@ -201,59 +196,6 @@ namespace DarkSunRE.ViewModels
             {
                 _statusService?.ShowError($"Failed to save interface resource: {ex.Message}", ex);
             }
-        }
-
-        private void ExportJson()
-        {
-            string path = BuildJsonPath();
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                _statusService?.ShowError("JSON folder is not configured.", null);
-                return;
-            }
-
-            try
-            {
-                // Capture the editor's current values first, then write one
-                // ui.json with every WIND/BUTN record of this GFF container.
-                Save();
-                InterfaceJsonStore.Export(_project, _container);
-                _statusService?.ShowSuccess($"UI JSON saved: {path}");
-            }
-            catch (Exception ex)
-            {
-                _statusService?.ShowError($"Failed to save UI JSON: {ex.Message}", ex);
-            }
-        }
-
-        private void ImportJson()
-        {
-            string path = BuildJsonPath();
-            if (string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path))
-            {
-                _statusService?.ShowError($"UI JSON not found: {path}", null);
-                return;
-            }
-
-            try
-            {
-                int applied = InterfaceJsonStore.Apply(_project, _container, path);
-                if (applied == 0)
-                    throw new InvalidDataException("ui.json contains no matching WIND/BUTN records.");
-
-                byte[] current = _resourceInfo.ModifiedData ?? _originalBytes;
-                Initialize(_project, _container, _resourceInfo, _originalBytes, current);
-                _statusService?.ShowSuccess($"UI JSON loaded: {path} ({applied} record(s))");
-            }
-            catch (Exception ex)
-            {
-                _statusService?.ShowError($"Failed to load UI JSON: {ex.Message}", ex);
-            }
-        }
-
-        public string BuildJsonPath()
-        {
-            return InterfaceJsonStore.GetPath(_project, _container);
         }
 
         private void AddField(string name, object original, object current, bool numeric)

@@ -17,7 +17,7 @@ namespace DarkSunRE.Services
     /// </summary>
     public static class InterfaceJsonStore
     {
-        public const string FileName = "ui.json";
+        public const string LegacyFileName = "ui.json";
 
         public static string GetPath(Project project, ResourceFile container)
         {
@@ -25,7 +25,7 @@ namespace DarkSunRE.Services
                 return string.Empty;
 
             string stem = Path.GetFileNameWithoutExtension(container.Name);
-            return Path.Combine(project.JsonFolderPath, stem, FileName);
+            return Path.Combine(project.JsonFolderPath, $"{stem}_ui.json");
         }
 
         public static void Export(Project project, ResourceFile container)

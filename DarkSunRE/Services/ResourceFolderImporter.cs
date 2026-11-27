@@ -40,6 +40,19 @@ namespace DarkSunRE.Services
 
             foreach (string folder in GetFolders(project, file.Name))
             {
+                string uiJson = Path.Combine(folder, InterfaceJsonStore.FileName);
+                if (File.Exists(uiJson))
+                {
+                    try
+                    {
+                        result.Imported += InterfaceJsonStore.Apply(project, file, uiJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        result.Errors.Add($"{InterfaceJsonStore.FileName}: {ex.Message}");
+                    }
+                }
+
                 foreach (ResourceInfo resource in file.Resources)
                 {
                     string prefix = $"{resource.Tag.Trim()}-{resource.Number}";

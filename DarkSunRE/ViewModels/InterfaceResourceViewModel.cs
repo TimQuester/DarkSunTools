@@ -84,6 +84,7 @@ namespace DarkSunRE.ViewModels
         private Project _project;
         private ResourceFile _container;
         private ResourceInfo _resourceInfo;
+        private byte[] _originalBytes;
         private WindResource _currentWind;
         private ButnResource _currentButn;
 
@@ -117,6 +118,7 @@ namespace DarkSunRE.ViewModels
             _project = project;
             _container = container;
             _resourceInfo = resourceInfo;
+            _originalBytes = originalBytes == null ? Array.Empty<byte>() : (byte[])originalBytes.Clone();
             string tag = ResourceCatalog.NormalizeTag(resourceInfo.Tag).TrimEnd();
             IsWindow = tag == "WIND";
             Kind = IsWindow ? "Window layout" : "Button";
@@ -212,35 +214,10 @@ namespace DarkSunRE.ViewModels
 
             try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                var dto = new InterfaceResourceJson
-                {
-                    Tag = _resourceInfo.Tag,
-                    Number = _resourceInfo.Number
-                };
-                foreach (InterfaceFieldViewModel field in Fields)
-                {
-                    dto.Fields.Add(new InterfaceFieldJson
-                    {
-                        Name = field.Name,
-                        OriginalValue = field.OriginalValue,
-                        Value = field.Value
-                    });
-                }
-                foreach (InterfaceItemViewModel item in Items)
-                {
-                    dto.Items.Add(new InterfaceItemJson
-                    {
-                        Tag = item.Tag,
-                        Id = item.Id,
-                        OriginalX = item.OriginalX,
-                        OriginalY = item.OriginalY,
-                        X = item.X,
-                        Y = item.Y
-                    });
-                }
-
-                System.IO.File.WriteAllText(path, JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true }));
+                // Capture the editor's current values first, then write one
+                // ui.json with every WIND/BUTN record of this GFF container.
+                Save();
+                InterfaceJsonStore.Export(_project, _container);
                 _statusService?.ShowSuccess($"UI JSON saved: {path}");
             }
             catch (Exception ex)
@@ -260,33 +237,13 @@ namespace DarkSunRE.ViewModels
 
             try
             {
-                InterfaceResourceJson dto = JsonSerializer.Deserialize<InterfaceResourceJson>(System.IO.File.ReadAllText(path));
-                if (dto == null)
-                    throw new InvalidDataException("UI JSON is empty.");
+                int applied = InterfaceJsonStore.Apply(_project, _container, path);
+                if (applied == 0)
+                    throw new InvalidDataException("ui.json contains no matching WIND/BUTN records.");
 
-                foreach (InterfaceFieldJson field in dto.Fields ?? new())
-                {
-                    InterfaceFieldViewModel target = Fields.FirstOrDefault(candidate =>
-                        string.Equals(candidate.Name, field.Name, StringComparison.OrdinalIgnoreCase));
-                    if (target != null)
-                        target.Value = field.Value;
-                }
-
-                foreach (InterfaceItemJson item in dto.Items ?? new())
-                {
-                    InterfaceItemViewModel target = Items.FirstOrDefault(candidate =>
-                        string.Equals(candidate.Tag, item.Tag, StringComparison.Ordinal) && candidate.Id == item.Id);
-                    if (target != null)
-                    {
-                        target.X = item.X;
-                        target.Y = item.Y;
-                    }
-                }
-
-                OnPropertyChanged(nameof(Fields));
-                OnPropertyChanged(nameof(Items));
-                Save();
-                _statusService?.ShowSuccess($"UI JSON loaded: {path}");
+                byte[] current = _resourceInfo.ModifiedData ?? _originalBytes;
+                Initialize(_project, _container, _resourceInfo, _originalBytes, current);
+                _statusService?.ShowSuccess($"UI JSON loaded: {path} ({applied} record(s))");
             }
             catch (Exception ex)
             {
@@ -296,12 +253,7 @@ namespace DarkSunRE.ViewModels
 
         public string BuildJsonPath()
         {
-            if (string.IsNullOrWhiteSpace(_project?.JsonFolderPath) || _resourceInfo == null)
-                return string.Empty;
-
-            string stem = Path.GetFileNameWithoutExtension(_container?.Name ?? "resources");
-            string safeTag = _resourceInfo.Tag.Trim().Replace(' ', '_');
-            return Path.Combine(_project.JsonFolderPath, stem, $"{safeTag}-{_resourceInfo.Number}.json");
+            return InterfaceJsonStore.GetPath(_project, _container);
         }
 
         private void AddField(string name, object original, object current, bool numeric)

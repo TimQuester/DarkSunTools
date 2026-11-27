@@ -1,4 +1,5 @@
 using DarkSunRE.ViewModels;
+using System;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -9,6 +10,24 @@ namespace DarkSunRE.Views
         public InterfaceResourceView()
         {
             InitializeComponent();
+        }
+
+        private void WindGrid_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
+        {
+            if (e.EditAction != DataGridEditAction.Commit ||
+                e.Row.Item is not InterfaceItemViewModel item ||
+                e.EditingElement is not TextBox editor)
+            {
+                return;
+            }
+
+            if (!short.TryParse(editor.Text, out short value))
+                return;
+
+            if (string.Equals(e.Column.Header?.ToString(), "New X", StringComparison.Ordinal))
+                item.X = value;
+            else if (string.Equals(e.Column.Header?.ToString(), "New Y", StringComparison.Ordinal))
+                item.Y = value;
         }
 
         private void Save_Click(object sender, RoutedEventArgs e)

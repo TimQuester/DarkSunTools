@@ -25,14 +25,15 @@
                       AutoGenerateColumns="False"
                       CanUserAddRows="False"
                       HeadersVisibility="Column"
+                      CellEditEnding="WindGrid_CellEditEnding"
                       Visibility="{Binding IsWindow, Converter={StaticResource BoolToVisibility}}">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Item" Binding="{Binding Tag}" IsReadOnly="True" Width="80"/>
                     <DataGridTextColumn Header="Id" Binding="{Binding Id}" IsReadOnly="True" Width="90"/>
                     <DataGridTextColumn Header="Original X" Binding="{Binding OriginalX}" IsReadOnly="True" Width="100"/>
                     <DataGridTextColumn Header="Original Y" Binding="{Binding OriginalY}" IsReadOnly="True" Width="100"/>
-                    <DataGridTextColumn Header="New X" Binding="{Binding X, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
-                    <DataGridTextColumn Header="New Y" Binding="{Binding Y, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
+                    <DataGridTextColumn Header="New X" Binding="{Binding X, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
+                    <DataGridTextColumn Header="New Y" Binding="{Binding Y, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
                 </DataGrid.Columns>
             </DataGrid>
 

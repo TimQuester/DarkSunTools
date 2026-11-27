@@ -1,4 +1,5 @@
 using DSunTools.Common.Image;
+using System.Collections;
 using System.Linq;
 using Xunit;
 
@@ -23,6 +24,23 @@ namespace Dsun.Common.Tests
             Assert.Equal(2, frames.Count);
             Assert.Equal(first, frames[0].GetPixels());
             Assert.Equal(second, frames[1].GetPixels());
+        }
+
+        [Fact]
+        public void PreservesTransparentPixels()
+        {
+            byte[] pixels = { 0, 1, 1, 0, 2, 2, 0, 0, 3, 0, 0, 4 };
+            var mask = new BitArray(12);
+            for (int i = 0; i < mask.Length; i++)
+                mask[i] = i % 3 != 0;
+
+            byte[] encoded = BitmapContainerWriter.Write(new[] { pixels }, 4, 3, new[] { mask });
+            var frame = ImageReading.ExtractFrames(encoded).Single();
+
+            Assert.Equal(pixels, frame.GetPixels());
+            var roundTripMask = frame.GetAlphaMask();
+            for (int i = 0; i < mask.Length; i++)
+                Assert.Equal(mask[i], roundTripMask[i]);
         }
 
         [Fact]

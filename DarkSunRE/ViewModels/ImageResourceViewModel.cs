@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -259,7 +260,13 @@ namespace DarkSunRE.ViewModels
                 {
                     ImageFrame frame = _frames[i];
                     string path = Path.Combine(dialog.FolderName, $"{baseName}_{i:D3}.png");
-                    AnimationPngCodec.ExportFrame(path, frame.GetPixels(), frame.Width, frame.Height, palette);
+                    AnimationPngCodec.ExportFrame(
+                        path,
+                        frame.GetPixels(),
+                        frame.Width,
+                        frame.Height,
+                        palette,
+                        frame.GetAlphaMask());
                 }
 
                 _statusService?.ShowSuccess($"Exported {_frames.Count} PNG frame(s) to {dialog.FolderName}");
@@ -329,12 +336,14 @@ namespace DarkSunRE.ViewModels
                 }
 
                 var framePixels = new List<byte[]>(imported.Count);
+                var alphaMasks = new List<BitArray?>(imported.Count);
                 int nearestPixels = 0;
                 foreach (AnimationPngCodec.ImportedFrame frame in imported)
                 {
                     AnimationPngCodec.PaletteRemapResult remap =
                         AnimationPngCodec.RemapToPalette(frame, targetPalette);
                     framePixels.Add(remap.Pixels);
+                    alphaMasks.Add(frame.AlphaMask);
                     nearestPixels += remap.NearestPixels;
                 }
 
@@ -347,7 +356,7 @@ namespace DarkSunRE.ViewModels
                 }
                 else
                 {
-                    encoded = BitmapContainerWriter.Write(framePixels, width, height);
+                    encoded = BitmapContainerWriter.Write(framePixels, width, height, alphaMasks);
                 }
 
                 _imageData = encoded;

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 
@@ -17,19 +18,31 @@ namespace DSunTools.Common.Image
         private const byte LastRunFlag = 0x80;
         private const byte Column256Flag = 0x01;
 
-        public static byte[] Write(IReadOnlyList<byte[]> frames, int width, int height)
+        public static byte[] Write(
+            IReadOnlyList<byte[]> frames,
+            int width,
+            int height,
+            IReadOnlyList<BitArray?>? alphaMasks = null)
         {
             if (frames == null) throw new ArgumentNullException(nameof(frames));
             if (frames.Count == 0) throw new ArgumentException("At least one frame is required.", nameof(frames));
+            if (alphaMasks != null && alphaMasks.Count != frames.Count)
+                throw new ArgumentException("Every frame needs an alpha mask.", nameof(alphaMasks));
             if (width <= 0 || width > 0x1FF || height <= 0 || height >= 0xFF)
                 throw new ArgumentOutOfRangeException(nameof(width), "Bitmap dimensions are outside the row-based format limits.");
 
             var bodies = new List<byte[]>(frames.Count);
-            foreach (byte[] frame in frames)
+            for (int i = 0; i < frames.Count; i++)
             {
+                byte[] frame = frames[i];
                 if (frame == null || frame.Length != width * height)
                     throw new ArgumentException($"Every frame must be exactly {width * height} pixels.", nameof(frames));
-                bodies.Add(EncodeFrame(frame, width, height));
+
+                BitArray? mask = alphaMasks?[i];
+                if (mask != null && mask.Length < frame.Length)
+                    throw new ArgumentException("Alpha mask is smaller than the frame.", nameof(alphaMasks));
+
+                bodies.Add(EncodeFrame(frame, width, height, mask));
             }
 
             using var output = new MemoryStream();
@@ -56,37 +69,69 @@ namespace DSunTools.Common.Image
             return output.ToArray();
         }
 
-        private static byte[] EncodeFrame(byte[] pixels, int width, int height)
+        private static byte[] EncodeFrame(byte[] pixels, int width, int height, BitArray? alphaMask)
         {
             using var stream = new MemoryStream();
             using var writer = new BinaryWriter(stream);
             writer.Write((ushort)width);
             writer.Write((ushort)height);
 
+            var spans = new List<(int Start, int Length)>();
             for (int y = 0; y < height; y++)
             {
-                writer.Write((byte)y);
                 int rowStart = y * width;
-                int x = 0;
-                while (x < width)
-                {
-                    int span = Math.Min(MaxRunPixels, width - x);
-                    byte[] compressed = EncodeRle(pixels, rowStart + x, span);
-                    bool last = x + span >= width;
-                    int startX = x;
-                    byte flags = (byte)(last ? LastRunFlag : 0);
-                    if (startX >= 256)
-                    {
-                        flags |= Column256Flag;
-                        startX -= 256;
-                    }
+                spans.Clear();
 
-                    writer.Write((byte)startX);
-                    writer.Write(flags);
-                    writer.Write((byte)span);
-                    writer.Write((byte)compressed.Length);
-                    writer.Write(compressed);
-                    x += span;
+                if (alphaMask == null)
+                {
+                    spans.Add((0, width));
+                }
+                else
+                {
+                    int x = 0;
+                    while (x < width)
+                    {
+                        while (x < width && !alphaMask[rowStart + x])
+                            x++;
+                        int start = x;
+                        while (x < width && alphaMask[rowStart + x])
+                            x++;
+                        if (x > start)
+                            spans.Add((start, x - start));
+                    }
+                }
+
+                if (spans.Count == 0)
+                    continue;
+
+                writer.Write((byte)y);
+                for (int spanIndex = 0; spanIndex < spans.Count; spanIndex++)
+                {
+                    int spanStart = spans[spanIndex].Start;
+                    int remaining = spans[spanIndex].Length;
+                    while (remaining > 0)
+                    {
+                        int chunk = Math.Min(MaxRunPixels, remaining);
+                        bool lastChunk = spanIndex == spans.Count - 1 && remaining == chunk;
+                        byte[] compressed = EncodeRle(pixels, rowStart + spanStart, chunk);
+
+                        int startX = spanStart;
+                        byte flags = (byte)(lastChunk ? LastRunFlag : 0);
+                        if (startX >= 256)
+                        {
+                            flags |= Column256Flag;
+                            startX -= 256;
+                        }
+
+                        writer.Write((byte)startX);
+                        writer.Write(flags);
+                        writer.Write((byte)chunk);
+                        writer.Write((byte)compressed.Length);
+                        writer.Write(compressed);
+
+                        spanStart += chunk;
+                        remaining -= chunk;
+                    }
                 }
             }
 

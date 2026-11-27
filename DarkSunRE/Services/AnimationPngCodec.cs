@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -22,6 +23,7 @@ namespace DarkSunRE.Services
             public int Height { get; init; }
             public byte[] Pixels { get; init; }
             public IReadOnlyList<MediaColor> Palette { get; init; }
+            public BitArray? AlphaMask { get; init; }
         }
 
         public sealed class PaletteRemapResult
@@ -36,13 +38,37 @@ namespace DarkSunRE.Services
             byte[] indexedPixels,
             int width,
             int height,
-            Palette palette)
+            Palette palette,
+            BitArray? alphaMask = null)
         {
             if (indexedPixels == null) throw new ArgumentNullException(nameof(indexedPixels));
             if (indexedPixels.Length != width * height)
                 throw new ArgumentException("Pixel buffer does not match frame dimensions.", nameof(indexedPixels));
 
-            BitmapPalette bitmapPalette = ToBitmapPalette(palette);
+            // An indexed PNG expresses transparency through tRNS (alpha
+            // values on palette entries). Interior transparent pixels in
+            // icons are commonly index 0; make only indices that are never
+            // used by an opaque pixel transparent, so no visible color is
+            // lost when the same index appears on both sides of the mask.
+            HashSet<byte>? transparentIndices = null;
+            if (alphaMask != null && alphaMask.Length >= indexedPixels.Length)
+            {
+                var transparent = new HashSet<byte>();
+                var opaque = new HashSet<byte>();
+                for (int i = 0; i < indexedPixels.Length; i++)
+                {
+                    if (alphaMask[i])
+                        opaque.Add(indexedPixels[i]);
+                    else
+                        transparent.Add(indexedPixels[i]);
+                }
+
+                transparent.ExceptWith(opaque);
+                if (transparent.Count > 0)
+                    transparentIndices = transparent;
+            }
+
+            BitmapPalette bitmapPalette = ToBitmapPalette(palette, transparentIndices);
             BitmapSource bitmap = BitmapSource.Create(
                 width,
                 height,
@@ -91,12 +117,31 @@ namespace DarkSunRE.Services
             var pixels = new byte[stride * frame.PixelHeight];
             frame.CopyPixels(pixels, stride, 0);
 
+            var palette = frame.Palette.Colors.ToList();
+            BitArray? alphaMask = null;
+            if (palette.Any(color => color.A != 255))
+            {
+                alphaMask = new BitArray(pixels.Length);
+                bool hasTransparency = false;
+                for (int i = 0; i < pixels.Length; i++)
+                {
+                    int index = pixels[i];
+                    bool opaque = index < palette.Count && palette[index].A != 0;
+                    alphaMask[i] = opaque;
+                    hasTransparency |= !opaque;
+                }
+
+                if (!hasTransparency)
+                    alphaMask = null;
+            }
+
             return new ImportedFrame
             {
                 Width = frame.PixelWidth,
                 Height = frame.PixelHeight,
                 Pixels = pixels,
-                Palette = frame.Palette.Colors.ToList()
+                Palette = palette,
+                AlphaMask = alphaMask
             };
         }
 
@@ -189,19 +234,25 @@ namespace DarkSunRE.Services
             return (byte)bestIndex;
         }
 
-        private static BitmapPalette ToBitmapPalette(Palette palette)
+        private static BitmapPalette ToBitmapPalette(
+            Palette palette,
+            HashSet<byte>? transparentIndices)
         {
             var colors = new List<MediaColor>(256);
             for (int i = 0; i < 256; i++)
             {
+                byte alpha = transparentIndices != null && transparentIndices.Contains((byte)i)
+                    ? (byte)0
+                    : (byte)255;
+
                 if (palette == null)
                 {
-                    colors.Add(MediaColor.FromRgb((byte)i, (byte)i, (byte)i));
+                    colors.Add(MediaColor.FromArgb(alpha, (byte)i, (byte)i, (byte)i));
                     continue;
                 }
 
                 var color = palette.GetColor(i);
-                colors.Add(MediaColor.FromRgb((byte)color.Red, (byte)color.Green, (byte)color.Blue));
+                colors.Add(MediaColor.FromArgb(alpha, (byte)color.Red, (byte)color.Green, (byte)color.Blue));
             }
 
             return new BitmapPalette(colors);
